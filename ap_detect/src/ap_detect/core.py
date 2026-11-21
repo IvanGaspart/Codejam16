@@ -130,11 +130,12 @@ def _helper_path() -> Path | None:
     return next((p for p in candidates if p.is_dir()), None)
 
 
-def _darwin_helper() -> AP | None:
-    """Ask the bundled WifiInfo.app. The first run shows one Location prompt.
+def run_helper() -> dict | None:
+    """Launch WifiInfo.app and return its JSON reply, or None if unavailable.
 
     It is launched through `open` (not executed directly) so that macOS treats
-    it as its own app instead of attributing it to the terminal.
+    it as its own app instead of attributing it to the terminal. The first run
+    shows the one-time Location Services prompt.
     """
     app = _helper_path()
     if app is None or not shutil.which("open"):
@@ -145,9 +146,32 @@ def _darwin_helper() -> AP | None:
         if _run(["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)], timeout=90) is None:
             return None
         try:
-            data = json.loads(out.read_text())
+            return json.loads(out.read_text())
         except (OSError, ValueError):
             return None
+
+
+def authorize() -> str:
+    """Trigger the macOS Location Services prompt for the helper (macOS only).
+
+    Returns "granted", "denied", "timeout", "unclear" (permission may be fine
+    but no Wi-Fi data came back, e.g. not connected), "helper-missing", or
+    "not-needed" on other platforms.
+    """
+    if platform.system() != "Darwin":
+        return "not-needed"
+    data = run_helper()
+    if data is None:
+        return "helper-missing"
+    if data.get("bssid"):
+        return "granted"
+    return {"denied": "denied", "timeout": "timeout"}.get(data.get("error"), "unclear")
+
+
+def _darwin_helper() -> AP | None:
+    data = run_helper()
+    if data is None:
+        return None
     if "error" in data:
         log.debug("WifiInfo.app reported: %s", data["error"])
         return None

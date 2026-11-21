@@ -1,24 +1,26 @@
 [project]
-name = "larpscan"
+name = "scanner"
 version = "0.1.0"
-description = "Map connected Wi-Fi BSSID to a Trottier floor using a surveyed lookup table"
+description = "LARP-scan scanner: Trottier floor prediction + BLE sightings"
 readme = "README.md"
 authors = [
     { name = "Zachary Chuang", email = "zmchuang365@gmail.com" }
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "bleak>=1.0.0",
     "pyobjc-framework-corewlan>=13.0 ; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
-predict-floor = "floor_lookup.predict:main"
-collect-aps = "floor_lookup.collect:main"
+predict-floor = "scanner.predict:main"
+collect-aps = "scanner.collect:main"
+scan-loop = "scanner.scan_loop:main"
 
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
-module-name = "floor_lookup"
+module-name = "scanner"
 module-root = "src"

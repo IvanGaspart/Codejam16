@@ -10,7 +10,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from ap_detect import get_current_ap
+from .wifi import get_current_ap
 
 MAC_RE = re.compile(r"(?<![0-9a-f:])([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})(?![0-9a-f:])", re.I)
 
@@ -86,7 +86,7 @@ def predict_floor(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        description="Predict Trottier floor from the connected Wi-Fi BSSID (via ap_detect).",
+        description="Predict Trottier floor from the connected Wi-Fi BSSID.",
     )
     p.add_argument(
         "--lookup",
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     if result is None:
         print(
             "not connected to Wi-Fi (no BSSID). "
-            "On macOS 14+, grant Location Services — see ap_detect README.",
+            "On macOS 14+, grant Location Services — see floor_lookup README.",
             file=sys.stderr,
         )
         return 2

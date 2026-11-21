@@ -8,13 +8,14 @@ LARP-scan — see [`docs/SPEC.md`](docs/SPEC.md).
 
 | Package | Role |
 |---------|------|
-| [`ap_detect/`](ap_detect/) | Cross-platform current Wi-Fi BSSID (`uv run python -m ap_detect`) |
-| [`floor_lookup/`](floor_lookup/) | Trottier BSSID → floor lookup (`uv run predict-floor`) |
+| [`ap_detect/`](ap_detect/) | Shared cross-platform BSSID helper (for `scanner/` per SPEC) |
+| [`floor_lookup/`](floor_lookup/) | Trottier BSSID → floor (+ vendored wifi detect) |
 
 ```bash
-cd ap_detect && uv sync
-cd ../floor_lookup && uv sync
+cd floor_lookup && uv sync
 uv run predict-floor
 ```
+
+On macOS, see `floor_lookup/README.md` for the WifiInfo helper build.
 
 Raw survey walks write under `data/` (gitignored). Packaged lookup CSVs live in `floor_lookup/src/floor_lookup/data/`.

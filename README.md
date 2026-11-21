@@ -8,14 +8,14 @@ LARP-scan — see [`docs/SPEC.md`](docs/SPEC.md).
 
 | Package | Role |
 |---------|------|
-| [`ap_detect/`](ap_detect/) | Shared cross-platform BSSID helper (for `scanner/` per SPEC) |
-| [`service/`](service/) | Trottier BSSID → floor (+ vendored wifi detect) |
+| [`service/`](service/) | uv project `scanner`: Trottier floor + BLE scan loop |
 
 ```bash
 cd service && uv sync
 uv run predict-floor
+uv run scan-loop
 ```
 
 On macOS, see [`service/README.md`](service/README.md) for the WifiInfo helper build.
 
-Raw survey walks write under `data/` (gitignored). Packaged lookup CSVs live in `service/src/floor_lookup/data/`.
+Raw survey walks write under `data/` (gitignored). Packaged lookup CSVs live in `service/src/scanner/data/`.

@@ -2,9 +2,11 @@
 
 Drops device names (RQ-05) and sightings weaker than ``RSSI_FLOOR``.
 Addresses are deduplicated within each interval (strongest RSSI wins).
-Address type is not filtered: phones typically use rotating resolvable
-private addresses, and BlueZ/bleak do not reliably expose type across
-platforms — we keep the opaque lowercase address only.
+
+On Linux/Windows, ``device.address`` is a Bluetooth MAC. On macOS,
+CoreBluetooth hides MACs and bleak reports a peripheral UUID instead —
+we accept both so ``scan-loop`` works locally. The server batch DTO
+currently requires MAC form; Linux scanners are the POST path for MVP.
 """
 
 from __future__ import annotations
@@ -21,6 +23,9 @@ from bleak.backends.scanner import AdvertisementData
 RSSI_FLOOR = -85
 
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 
 
 @dataclass(frozen=True)
@@ -33,10 +38,13 @@ class Sighting:
 
 
 def norm_address(raw: str | None) -> str | None:
-    """Lowercase colon-separated MAC, or None if malformed."""
+    """Normalize a BLE id: lowercase MAC, or lowercase UUID on macOS."""
     if not raw:
         return None
-    addr = raw.strip().lower().replace("-", ":")
+    addr = raw.strip().lower()
+    if _UUID_RE.match(addr):
+        return addr
+    addr = addr.replace("-", ":")
     parts = addr.split(":")
     if len(parts) != 6 or any(not p for p in parts):
         return None

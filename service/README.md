@@ -1,4 +1,4 @@
-# floor-lookup
+# service
 
 Predict which **Trottier** floor you are on from the Wi-Fi BSSID you are associated with.
 
@@ -13,7 +13,7 @@ Includes cross-platform AP detection (Linux / macOS / Windows) in `floor_lookup.
 ```
 
 ```bash
-cd floor_lookup
+cd service
 uv sync
 uv run predict-floor
 uv run python -m floor_lookup
@@ -22,7 +22,7 @@ uv run python -m floor_lookup
 ## Install
 
 ```bash
-cd floor_lookup
+cd service
 uv sync
 ```
 
@@ -62,6 +62,18 @@ Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packa
 | `src/floor_lookup/data/trottier.csv` | Server-ready `bssid,floor` (RQ-03) |
 
 ## Layout
+
+```text
+service/
+  pyproject.toml
+  uv.lock
+  helper/                 # macOS WifiInfo.app build
+  src/floor_lookup/       # Python package (import name unchanged)
+    wifi.py
+    predict.py
+    collect.py
+    data/
+```
 
 | Module | Role |
 |--------|------|

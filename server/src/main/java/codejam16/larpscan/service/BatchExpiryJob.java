@@ -33,7 +33,12 @@ public class BatchExpiryJob {
     this.clock = clock;
   }
 
-  /** Scheduler entry point. The first run waits one window, so startup does no work. */
+  /**
+   * Scheduler entry point. The first run waits one window, so startup does no work.
+   * {@code @Transactional} must sit here too: calling {@link #expire()} on {@code this} bypasses
+   * the Spring proxy, so its own annotation would not apply.
+   */
+  @Transactional
   @Scheduled(
       initialDelayString = "${larp.window-seconds}",
       fixedRateString = "${larp.window-seconds}",

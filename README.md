@@ -13,7 +13,9 @@ LARP-scan — see [`docs/SPEC.md`](docs/SPEC.md).
 ```bash
 cd service && uv sync
 uv run predict-floor
-uv run scan-loop
+export LARP_SERVER_URL=http://localhost:8080 LARP_API_KEY=dev-local-key
+uv run scan-loop          # POST RSSI batches every 15s
+uv run scan-loop --no-post
 ```
 
 On macOS, see [`service/README.md`](service/README.md) for the WifiInfo helper build.

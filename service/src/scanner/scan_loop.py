@@ -1,14 +1,11 @@
-"""Main scanner loop: periodic floor prediction + BLE sightings.
-
-Yields updates shaped for the server batch DTO (bssid + sightings).
-HTTP posting is left to a later step (#44).
-"""
+"""Main scanner loop: periodic floor prediction + BLE sightings + batch POST."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import json
+import logging
 import signal
 import sys
 from collections.abc import AsyncIterator
@@ -16,10 +13,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
+
 from .ble import RSSI_FLOOR, Sighting, SightingBuffer, open_scanner
+from .config import ScannerConfig, load_config
+from .poster import send_batch
 from .predict import predict_floor
 
 BATCH_INTERVAL = 15.0
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -33,6 +36,18 @@ class ScanUpdate:
     @property
     def device_count(self) -> int:
         return len(self.devices)
+
+    @property
+    def sightings(self) -> list[int]:
+        """RSSI list for ``BatchRequest.sightings`` (FX-01.2)."""
+        return [d.rssi for d in self.devices]
+
+    @property
+    def bssid(self) -> str | None:
+        if self.floor is None:
+            return None
+        bssid = self.floor.get("bssid")
+        return bssid if isinstance(bssid, str) and bssid else None
 
 
 async def run(
@@ -61,18 +76,28 @@ async def run(
         await scanner.stop()
 
 
-def _devices_payload(devices: list[Sighting]) -> list[dict[str, Any]]:
-    return [
-        {
-            "address": d.address,
-            "rssi": d.rssi,
-            "seenAt": d.seen_at.isoformat().replace("+00:00", "Z"),
-        }
-        for d in devices
-    ]
+async def post_update(
+    update: ScanUpdate,
+    config: ScannerConfig,
+    client: httpx.AsyncClient,
+) -> bool:
+    """POST ``update`` if online; skip when offline. Returns whether a POST succeeded."""
+    bssid = update.bssid
+    if bssid is None:
+        log.info("skip POST (offline / no bssid)")
+        return False
+    return await send_batch(
+        base_url=config.server_url,
+        api_key=config.api_key,
+        scanner_id=config.scanner_id,
+        bssid=bssid,
+        sent_at=update.at,
+        sightings=update.sightings,
+        client=client,
+    )
 
 
-def render_text(update: ScanUpdate) -> str:
+def render_text(update: ScanUpdate, *, posted: bool | None = None) -> str:
     floor = update.floor
     if floor is None:
         floor_line = "floor=offline"
@@ -85,10 +110,20 @@ def render_text(update: ScanUpdate) -> str:
     else:
         floor_line = f"floor=unknown  bssid={floor.get('bssid')}"
 
+    post_line = ""
+    if posted is True:
+        post_line = "posted=ok"
+    elif posted is False and update.bssid is None:
+        post_line = "posted=skipped"
+    elif posted is False:
+        post_line = "posted=failed"
+    elif posted is None:
+        post_line = "posted=disabled"
+
     lines = [
         f"at={update.at.isoformat().replace('+00:00', 'Z')}",
         floor_line,
-        f"devices={update.device_count}  min_rssi={RSSI_FLOOR}",
+        f"devices={update.device_count}  min_rssi={RSSI_FLOOR}  {post_line}".rstrip(),
         f"{'RSSI':>6}  ADDRESS",
         f"{'----':>6}  -------",
     ]
@@ -100,13 +135,16 @@ def render_text(update: ScanUpdate) -> str:
     return "\n".join(lines)
 
 
-def render_json(update: ScanUpdate) -> str:
-    floor = update.floor
+def render_json(update: ScanUpdate, *, posted: bool | None = None) -> str:
     payload = {
         "at": update.at.isoformat().replace("+00:00", "Z"),
-        "floor": floor,
+        "floor": update.floor,
         "deviceCount": update.device_count,
-        "devices": _devices_payload(update.devices),
+        "sightings": update.sightings,
+        "devices": [
+            {"address": d.address, "rssi": d.rssi} for d in update.devices
+        ],
+        "posted": posted,
     }
     return json.dumps(payload, indent=2)
 
@@ -114,8 +152,9 @@ def render_json(update: ScanUpdate) -> str:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
-            "Periodically predict Trottier floor and list nearby BLE devices "
-            f"(RSSI ≥ {RSSI_FLOOR} dBm). Ctrl-C to stop."
+            "Periodically predict Trottier floor, list nearby BLE devices "
+            f"(RSSI ≥ {RSSI_FLOOR} dBm), and POST RSSI batches to the server. "
+            "Ctrl-C to stop."
         ),
     )
     p.add_argument(
@@ -140,10 +179,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Emit a single update then exit",
     )
+    p.add_argument(
+        "--no-post",
+        action="store_true",
+        help="Do not POST batches (local scan + floor only)",
+    )
+    p.add_argument(
+        "--server-url",
+        default=None,
+        help="Override LARP_SERVER_URL",
+    )
+    p.add_argument(
+        "--api-key",
+        default=None,
+        help="Override LARP_API_KEY",
+    )
     return p.parse_args(argv)
 
 
 async def _amain(args: argparse.Namespace) -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s %(name)s: %(message)s",
+        stream=sys.stderr,
+    )
+
     stop = asyncio.Event()
 
     def _request_stop(*_sig: object) -> None:
@@ -156,15 +216,39 @@ async def _amain(args: argparse.Namespace) -> int:
         except NotImplementedError:
             pass
 
+    config: ScannerConfig | None = None
+    if not args.no_post:
+        try:
+            config = load_config(server_url=args.server_url, api_key=args.api_key)
+        except ValueError as exc:
+            print(f"scan-loop config: {exc}", file=sys.stderr)
+            print("Set LARP_SERVER_URL and LARP_API_KEY, or pass --no-post.", file=sys.stderr)
+            return 2
+        log.info(
+            "posting to %s/api/batches scanner_id=%s id_file=%s",
+            config.server_url,
+            config.scanner_id,
+            config.scanner_id_path,
+        )
+
     try:
         agen = run(interval=args.interval, min_rssi=args.min_rssi)
-        async for update in agen:
-            body = render_json(update) if args.json else render_text(update)
-            if not args.json and sys.stdout.isatty() and not args.once:
-                sys.stdout.write("\033[2J\033[H")
-            print(body, flush=True)
-            if args.once or stop.is_set():
-                break
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            async for update in agen:
+                posted: bool | None = None
+                if config is not None:
+                    posted = await post_update(update, config, client)
+
+                body = (
+                    render_json(update, posted=posted)
+                    if args.json
+                    else render_text(update, posted=posted)
+                )
+                if not args.json and sys.stdout.isatty() and not args.once:
+                    sys.stdout.write("\033[2J\033[H")
+                print(body, flush=True)
+                if args.once or stop.is_set():
+                    break
         await agen.aclose()
     except Exception as exc:  # noqa: BLE001 — surface adapter errors cleanly
         print(f"scan-loop failed: {exc}", file=sys.stderr)

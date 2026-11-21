@@ -29,7 +29,7 @@ One running instance of the LARP-scan service on a laptop, which listens for BLE
 _Avoid_: sniffer, agent, client
 
 **Sighting**:
-One BLE address heard by one Scanner at one moment, with its signal strength and the AP the Scanner was connected to.
+One BLE device heard by one Scanner during one batch, reported only as its signal strength (RSSI). A batch holds at most one Sighting per device; the device's address never leaves the Scanner.
 _Avoid_: ping, packet, scan result
 
 ### Results

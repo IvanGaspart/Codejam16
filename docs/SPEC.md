@@ -40,18 +40,18 @@ Website (Lovable React SPA, lovable.app)
 
 | ID | Requirement | Milestone |
 |---|---|---|
-| RQ-01 | Every `BATCH_INTERVAL` the Scanner shall send the server a batch containing its Scanner ID, the BSSID of its current **AP** (re-read every batch), and its **Sightings** (BLE address, RSSI, time) stronger than `RSSI_FLOOR`. It shall send a batch even when it has no Sightings. It shall not send when not connected to Wi-Fi. | MVP |
-| RQ-02 | The server shall compute each **Floor**'s **Busyness** from the distinct BLE addresses sighted on that Floor in the last `WINDOW`, and shall delete Sightings older than `WINDOW`. | MVP |
+| RQ-01 | Every `BATCH_INTERVAL` the Scanner shall send the server a batch containing its Scanner ID, the BSSID of its current **AP** (re-read every batch), and its **Sightings**: one RSSI per distinct device heard during the interval, stronger than `RSSI_FLOOR`. It shall send a batch even when it has no Sightings. It shall not send when not connected to Wi-Fi. | MVP |
+| RQ-02 | The server shall compute each **Floor**'s **Busyness** from the Sighting counts of the latest batch per Scanner on that Floor in the last `WINDOW`, and shall delete batches older than `WINDOW`. | MVP |
 | RQ-03 | The server shall map every Trottier AP to a Floor by BSSID, loaded from CSV at startup. It shall store batches with an unknown BSSID, leave them out of Busyness and coverage, and log the BSSID. | MVP |
 | RQ-04 | The subsystems shall communicate through the REST API defined below. | MVP |
-| RQ-05 | The Scanner shall transmit only non-resolvable BLE addresses and shall never transmit device names. | MVP |
+| RQ-05 | The Scanner shall never transmit BLE addresses, CoreBluetooth identifiers or device names. It uses them only locally, to send one RSSI per device. | MVP |
 | RQ-06 | The server shall serve, over the internet, a website that goes building card → floor stack → floor view. | MVP |
 | RQ-07 | The server shall turn Sightings into human-readable results: Busyness level, smoothed percentage, estimated people, and per-minute history snapshots. | MVP |
 | RQ-08 | The Scanner shall run as a daemon: a systemd user service on Linux (MVP) and a launchd agent on macOS (Stretch 1). Windows is out of scope. | MVP / Stretch 1 |
 | RQ-09 | The system shall cover only the Trottier **Building**. | MVP |
 | RQ-10 | The website shall show "No data" for a Floor that has received no batch from any of its APs in the last `WINDOW`. | MVP |
 | RQ-11 | `POST /api/batches` shall reject requests that lack the shared API key. | MVP |
-| RQ-12 | When several Scanners hear the same address, the server shall assign it to the Floor of the Scanner that heard it with the strongest RSSI. | Stretch 1 |
+| RQ-12 | ~~When several Scanners hear the same address, the server shall assign it to the Floor of the Scanner that heard it with the strongest RSSI.~~ Withdrawn: the server no longer receives device identifiers ([ADR-0002](adr/0002-rssi-only-batches.md)). | Stretch 1 |
 | RQ-13 | The website shall show Busyness predictions for each Floor (e.g. "usually busy at 2pm"). | Stretch 1 |
 | RQ-14 | The building card shall become an interactive map. | Stretch 1 |
 
@@ -60,16 +60,19 @@ Website (Lovable React SPA, lovable.app)
 For each Floor `f`, at time `t`:
 
 ```
-covered(f)         = some batch with an AP on f arrived in (t − WINDOW, t]
-distinct(f)        = count of distinct addresses in Sightings on f in (t − WINDOW, t]
-estimatedPeople(f) = distinct(f) / K
+latest(s)          = Scanner s's most recent batch received in (t − WINDOW, t]
+covered(f)         = some Scanner's latest(s) has an AP on f
+devices(f)         = sum of |rssis| over latest(s) for every Scanner s whose latest(s) is on f
+estimatedPeople(f) = devices(f) / K
 busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 ```
 
+- **Latest batch only:** each Scanner counts once, by its latest batch, so a device heard in every batch of the window is not counted again per batch, and a Scanner that changed Floors counts only on its current one.
+- **Overlap:** two Scanners on one Floor that hear the same device both count it. The server cannot tell, since it gets no identifiers.
 - **Not covered:** the result is `level = NO_DATA`, whatever the counts are.
 - **Partial coverage:** a Scanner hears only about 10–20 m. Counts are reported as-is and not scaled up to the whole Floor.
 - **Smoothing:** the percentage shown is the mean of the last `SMOOTHING_SNAPSHOTS` snapshots.
-- **Snapshots:** every `SNAPSHOT_INTERVAL` the server stores `(floor, at, busynessPct, covered)` for every Floor. Snapshots are kept; Sightings are not.
+- **Snapshots:** every `SNAPSHOT_INTERVAL` the server stores `(floor, at, busynessPct, covered)` for every Floor. Snapshots are kept; batches are not.
 
 | Level | busynessPct |
 |---|---|
@@ -83,8 +86,8 @@ busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 | Name | Default | Note |
 |---|---|---|
 | `BATCH_INTERVAL` | 15 s | Scanner POST period |
-| `RSSI_FLOOR` | −85 dBm | Scanner drops weaker Sightings |
-| `WINDOW` | 120 s | Must stay well below the ~15 min BLE address rotation, or one device is counted twice |
+| `RSSI_FLOOR` | −85 dBm | Scanner drops weaker devices |
+| `WINDOW` | 120 s | How long a Scanner's latest batch stays valid. Several `BATCH_INTERVAL`s, so one dropped POST does not flip a Floor to "No data". |
 | `K` | 2.5 | Devices per person. Calibrate once by counting heads on one Floor. |
 | `SNAPSHOT_INTERVAL` | 60 s | |
 | `SMOOTHING_SNAPSHOTS` | 5 | |
@@ -100,16 +103,14 @@ Header `X-API-Key: <shared key>`. Missing or wrong key → `401`.
   "scannerId": "3f2b…-uuid",
   "bssid": "44:48:c1:a4:1a:50",
   "sentAt": "2026-11-21T14:03:15Z",
-  "sightings": [
-    { "address": "5e:aa:01:23:45:67", "rssi": -67, "seenAt": "2026-11-21T14:03:09Z" }
-  ]
+  "sightings": [-67, -72, -80]
 }
 ```
 
-→ `202 Accepted`. `sightings` may be empty.
+→ `202 Accepted`. `sightings` holds one RSSI in dBm (−127 to 0) per device heard during the interval, and may be empty.
 
 - **`scannerId`:** a random UUID generated once per install.
-- **Address format:** BSSIDs and addresses are lowercase, colon-separated.
+- **BSSID format:** lowercase, colon-separated.
 
 ### `GET /api/buildings`
 
@@ -150,8 +151,7 @@ At startup the server truncates the AP and Floor tables and reloads them from th
 |---|---|
 | `floor` | `building_id, floor, capacity` |
 | `access_point` | `bssid (pk), building_id, floor` |
-| `batch` | `id, scanner_id, bssid, received_at` (kept for `WINDOW`; used for coverage) |
-| `sighting` | `id, batch_id, address, rssi, seen_at` (kept for `WINDOW`) |
+| `batch` | `id, scanner_id, bssid, sent_at, received_at, rssis int[]` (one RSSI per device heard; kept for `WINDOW`; used for coverage and counts) |
 | `busyness_snapshot` | `building_id, floor, at, busyness_pct, covered` (kept) |
 
 ## Website
@@ -163,9 +163,9 @@ At startup the server truncates the AP and Floor tables and reloads them from th
 
 ## Scanner
 
-1. **Scan:** continuously with `bleak`. Drop names and Sightings weaker than `RSSI_FLOOR`.
+1. **Scan:** continuously with `bleak`. Keep the strongest RSSI per device address (MAC on Linux, CoreBluetooth UUID on macOS) seen this interval, and drop devices weaker than `RSSI_FLOOR`. Addresses and names stay on the laptop.
 2. **Locate:** every `BATCH_INTERVAL`, call `ap_detect.get_current_ap()`. If it returns `None`, skip this batch.
-3. **Send:** POST the batch, then clear the buffer. On a network error, drop the batch; there is no retry queue.
+3. **Send:** POST the batch with one RSSI per device, then clear the buffer. On a network error, drop the batch; there is no retry queue.
 4. **Configure:** with env vars `LARP_SERVER_URL` and `LARP_API_KEY`, and the Scanner ID file at `~/.config/larp-scan/scanner-id`.
 5. **Install:** `scanner/install.sh` installs a systemd **user** unit, so it has the D-Bus access BlueZ needs.
 

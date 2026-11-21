@@ -21,17 +21,17 @@ Source of truth for populating the GitHub Project. Requirements are defined in [
 | Issue | Slices | Assignee | Milestone |
 |---|---|---|---|
 | RQ-01: Scanner sends batches | scanner | zachmchuang | MVP |
-| RQ-02: Busyness from distinct addresses in window | logic, db | IvanGaspart | MVP |
+| RQ-02: Busyness from latest batch per Scanner in window | logic, db | IvanGaspart | MVP |
 | RQ-03: AP → Floor mapping | data, db | zachmchuang | MVP |
 | RQ-04: REST API | rest | jacob-sauve | MVP |
-| RQ-05: Only non-resolvable addresses, no names | scanner | zachmchuang | MVP |
+| RQ-05: Never transmit BLE addresses / names (RSSI only) | scanner | zachmchuang | MVP |
 | RQ-06: Website on the internet | frontend, hosting | jacob-sauve | MVP |
 | RQ-07: Human-readable results (level, smoothing, history) | logic | IvanGaspart | MVP |
 | RQ-08: Scanner runs as a daemon | scanner | zachmchuang | MVP (systemd) / Stretch 1 (launchd) |
 | RQ-09: Trottier only | data | zachmchuang | MVP |
 | RQ-10: "No data" for uncovered Floors | logic, frontend | IvanGaspart | MVP |
 | RQ-11: API key on POST | rest | jacob-sauve | MVP |
-| RQ-12: Strongest-RSSI resolution across Scanners | logic | IvanGaspart | Stretch 1 |
+| RQ-12: Strongest-RSSI resolution across Scanners (withdrawn, ADR-0002) | logic | IvanGaspart | Stretch 1 |
 | RQ-13: Busyness predictions | logic, frontend | IvanGaspart | Stretch 1 |
 | RQ-14: Interactive building map | frontend | jacob-sauve | Stretch 1 |
 
@@ -48,12 +48,12 @@ Source of truth for populating the GitHub Project. Requirements are defined in [
 
 | Task | Type | Slices | Parent | Relates to | Milestone |
 |---|---|---|---|---|---|
-| JPA entities and schema (floor, access_point, batch, sighting, busyness_snapshot) | task | db | RQ-02 | RQ-03, RQ-07 | MVP |
+| JPA entities and schema (floor, access_point, batch, busyness_snapshot) | task | db | RQ-02 | RQ-03, RQ-07 | MVP |
 | CSV loader for `trottier.csv` and `floors.csv` at startup | feature | db, data | RQ-03 | RQ-09 | MVP |
-| Batch ingestion service (store batch and Sightings, log unknown BSSIDs) | feature | logic | RQ-02 | RQ-03, RQ-04 | MVP |
-| Busyness calculation (distinct / K / capacity, levels) | feature | logic | RQ-02 | RQ-07 | MVP |
+| Batch ingestion service (store batch with its RSSIs, log unknown BSSIDs) | feature | logic | RQ-02 | RQ-03, RQ-04 | MVP |
+| Busyness calculation (latest-batch RSSI counts / K / capacity, levels) | feature | logic | RQ-02 | RQ-07 | MVP |
 | Coverage logic (`NO_DATA`) | feature | logic | RQ-10 | RQ-02 | MVP |
-| Expiry job (delete batches and Sightings older than `WINDOW`) | feature | logic, db | RQ-02 | | MVP |
+| Expiry job (delete batches older than `WINDOW`) | feature | logic, db | RQ-02 | | MVP |
 | Snapshot job (every `SNAPSHOT_INTERVAL`) and smoothing | feature | logic, db | RQ-07 | | MVP |
 | History query service | feature | logic | RQ-07 | RQ-04 | MVP |
 | Strongest-RSSI resolution across Scanners | feature | logic | RQ-12 | RQ-02 | Stretch 1 |

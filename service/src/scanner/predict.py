@@ -27,7 +27,7 @@ def norm_bssid(raw: str | None) -> str | None:
 
 def default_lookup_path() -> Path:
     """Packaged floor_ap_lookup.csv shipped with this module."""
-    return Path(resources.files("floor_lookup")) / "data" / "floor_ap_lookup.csv"
+    return Path(resources.files("scanner")) / "data" / "floor_ap_lookup.csv"
 
 
 def load_lookup(path: Path | None = None) -> dict[str, dict[str, Any]]:
@@ -106,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     if result is None:
         print(
             "not connected to Wi-Fi (no BSSID). "
-            "On macOS 14+, grant Location Services — see floor_lookup README.",
+            "On macOS 14+, grant Location Services — see scanner README.",
             file=sys.stderr,
         )
         return 2

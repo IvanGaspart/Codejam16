@@ -1,0 +1,25 @@
+[project]
+name = "scanner"
+version = "0.1.0"
+description = "LARP-scan scanner: Trottier floor prediction + BLE sightings"
+readme = "README.md"
+authors = [
+    { name = "Zachary Chuang", email = "zmchuang365@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "bleak>=1.0.0",
+    "pyobjc-framework-corewlan>=13.0 ; sys_platform == 'darwin'",
+]
+
+[project.scripts]
+predict-floor = "scanner.predict:main"
+collect-aps = "scanner.collect:main"
+scan-loop = "scanner.scan_loop:main"
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/scanner"]

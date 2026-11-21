@@ -31,13 +31,14 @@ Content-Type: application/json
 
 | Package | Role |
 |---------|------|
-| [`floor_lookup/`](floor_lookup/) | Trottier BSSID → floor (+ vendored wifi detect) |
+| [`service/`](service/) | uv project `scanner`: Trottier floor + BLE scan loop |
 
 ```bash
-cd floor_lookup && uv sync
+cd service && uv sync
 uv run predict-floor
+uv run scan-loop
 ```
 
 On macOS, see [`floor_lookup/README.md`](floor_lookup/README.md) for the WifiInfo helper build.
 
-Raw survey walks write under `data/` (gitignored). Packaged lookup CSVs live in `floor_lookup/src/floor_lookup/data/`.
+Raw survey walks write under `data/` (gitignored). Packaged lookup CSVs live in `service/src/scanner/data/`.

@@ -35,7 +35,12 @@ public class BusynessSnapshotJob {
     this.clock = clock;
   }
 
-  /** Scheduler entry point. The first run waits one interval, so startup does no work. */
+  /**
+   * Scheduler entry point. The first run waits one interval, so startup does no work.
+   * {@code @Transactional} must sit here too: calling {@link #snapshot()} on {@code this} bypasses
+   * the Spring proxy, so its own annotation would not apply and each Floor would save separately.
+   */
+  @Transactional
   @Scheduled(
       initialDelayString = "${larp.snapshot-interval-ms}",
       fixedRateString = "${larp.snapshot-interval-ms}"

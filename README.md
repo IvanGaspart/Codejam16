@@ -8,7 +8,6 @@ LARP-scan — see [`docs/SPEC.md`](docs/SPEC.md).
 
 | Package | Role |
 |---------|------|
-| [`ap_detect/`](ap_detect/) | Shared cross-platform BSSID helper (for `scanner/` per SPEC) |
 | [`floor_lookup/`](floor_lookup/) | Trottier BSSID → floor (+ vendored wifi detect) |
 
 ```bash

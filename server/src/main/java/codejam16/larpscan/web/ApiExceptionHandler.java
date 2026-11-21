@@ -1,5 +1,8 @@
 package codejam16.larpscan.web;
 
+
+import codejam16.larpscan.service.BuildingNotFoundException;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -49,4 +52,18 @@ public class ApiExceptionHandler {
         "Malformed JSON request body"
     );
   }
+
+  /**
+   * Handles requests referencing an unknown Building identifier.
+   *
+   * @param ex building-not-found exception
+   * @return {@code 404 Not Found} problem detail
+   */
+  @ExceptionHandler(BuildingNotFoundException.class)
+  public ProblemDetail handleBuildingNotFound(
+      codejam16.larpscan.service.BuildingNotFoundException ex
+  ) {
+    return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+  }
+
 }

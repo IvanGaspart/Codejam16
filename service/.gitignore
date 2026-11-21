@@ -2,4 +2,4 @@
 __pycache__/
 *.pyc
 helper/.build/
-src/floor_lookup/_bin/
+src/scanner/_bin/

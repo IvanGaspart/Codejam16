@@ -1,12 +1,12 @@
 """Get the BSSID / SSID of the currently connected Wi-Fi access point.
 
-    >>> from floor_lookup.wifi import get_current_ap
+    >>> from scanner.wifi import get_current_ap
     >>> get_current_ap()
     {'bssid': '44:48:c1:a4:1a:50', 'ssid': 'MyNetwork'}   # ssid may be None
 
 Returns None if nothing could be read. Set IW_DEBUG=1 to see why.
 
-Vendored from the standalone ap_detect package so floor_lookup is self-contained.
+Vendored from the standalone ap_detect package so scanner is self-contained.
 
 macOS note
 ----------

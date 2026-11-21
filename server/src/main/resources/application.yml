@@ -26,7 +26,7 @@ larp:
   # Allowed frontend origin for public GET endpoints (RQ-06)
   cors:
     allowed-origin: ${LARP_CORS_ORIGIN:http://localhost:5173}
-  # Sliding window in seconds for distinct BLE address counts & coverage (RQ-02, RQ-10)
+  # How long a Scanner's latest batch stays valid for counts & coverage (RQ-02, RQ-10)
   window-seconds: ${LARP_WINDOW_SECONDS:120}
   # Average number of BLE devices per person (calibrated once on one Trottier floor)
   k: ${LARP_K:2.5}

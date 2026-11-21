@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    # Use in-memory H2 during ./gradlew test so tests run without external Postgres
+    url: jdbc:h2:mem:larpscan_test;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop

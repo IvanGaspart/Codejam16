@@ -1,0 +1,36 @@
+server:
+  # Render injects PORT dynamically; default to 8080 for local development
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: larp-scan
+
+  datasource:
+    # Defaults to local Postgres; overridden in Render via environment variables
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/larpscan}
+    username: ${SPRING_DATASOURCE_USERNAME:larpscan}
+    password: ${SPRING_DATASOURCE_PASSWORD:larpscan}
+
+  jpa:
+    # Auto-create/update tables from JPA entities (KISS for hackathon iteration)
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    # Disable OSIV to prevent accidental lazy queries during HTTP serialization
+    open-in-view: false
+
+# LARP-scan domain and security settings (see docs/SPEC.md)
+larp:
+  # Shared secret checked by the POST /api/batches filter (RQ-11)
+  api-key: ${LARP_API_KEY:dev-local-key}
+  # Allowed frontend origin for public GET endpoints (RQ-06)
+  cors:
+    allowed-origin: ${LARP_CORS_ORIGIN:http://localhost:5173}
+  # Sliding window in seconds for distinct BLE address counts & coverage (RQ-02, RQ-10)
+  window-seconds: ${LARP_WINDOW_SECONDS:120}
+  # Average number of BLE devices per person (calibrated once on one Trottier floor)
+  k: ${LARP_K:2.5}
+  # Snapshot job period in milliseconds (60s default)
+  snapshot-interval-ms: ${LARP_SNAPSHOT_INTERVAL_MS:60000}
+  # Number of recent snapshots averaged for smoothed busyness percentage (RQ-07)
+  smoothing-snapshots: ${LARP_SMOOTHING_SNAPSHOTS:5}

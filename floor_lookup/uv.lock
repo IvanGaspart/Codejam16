@@ -3,26 +3,15 @@ revision = 5
 requires-python = ">=3.13"
 
 [[package]]
-name = "ap-detect"
+name = "floor-lookup"
 version = "0.1.0"
-source = { editable = "../ap_detect" }
+source = { editable = "." }
 dependencies = [
     { name = "pyobjc-framework-corewlan", marker = "sys_platform == 'darwin'" },
 ]
 
 [package.metadata]
 requires-dist = [{ name = "pyobjc-framework-corewlan", marker = "sys_platform == 'darwin'", specifier = ">=13.0" }]
-
-[[package]]
-name = "floor-lookup"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "ap-detect" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "ap-detect", editable = "../ap_detect" }]
 
 [[package]]
 name = "pyobjc-core"

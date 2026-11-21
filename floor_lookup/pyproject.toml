@@ -8,7 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "ap-detect",
+    "pyobjc-framework-corewlan>=13.0 ; sys_platform == 'darwin'",
 ]
 
 [project.scripts]
@@ -18,6 +18,3 @@ collect-aps = "floor_lookup.collect:main"
 [build-system]
 requires = ["uv_build>=0.11.7,<0.12.0"]
 build-backend = "uv_build"
-
-[tool.uv.sources]
-ap-detect = { path = "../ap_detect", editable = true }

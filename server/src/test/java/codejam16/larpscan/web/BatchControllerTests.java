@@ -35,13 +35,7 @@ class BatchControllerTests {
           "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
           "bssid": "44:48:c1:a4:1a:50",
           "sentAt": "2026-11-21T14:03:15Z",
-          "sightings": [
-            {
-              "address": "5e:aa:01:23:45:67",
-              "rssi": -67,
-              "seenAt": "2026-11-21T14:03:09Z"
-            }
-          ]
+          "sightings": [-67]
         }
         """;
 
@@ -71,20 +65,13 @@ class BatchControllerTests {
           "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
           "bssid": "44:48:C1:A4:1A:50",
           "sentAt": "2026-11-21T14:03:15Z",
-          "sightings": [
-            {
-              "address": "not-a-mac",
-              "rssi": -67,
-              "seenAt": "2026-11-21T14:03:09Z"
-            }
-          ]
+          "sightings": [-67]
         }
         """;
 
     mockMvc.perform(post("/api/batches").contentType(APPLICATION_JSON).content(payload))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors.bssid").exists())
-        .andExpect(jsonPath("$.errors['sightings[0].address']").exists());
+        .andExpect(jsonPath("$.errors.bssid").exists());
   }
 
   @Test
@@ -92,12 +79,7 @@ class BatchControllerTests {
     String payload = """
         {
           "bssid": "44:48:c1:a4:1a:50",
-          "sightings": [
-            {
-              "address": "5e:aa:01:23:45:67",
-              "rssi": 12
-            }
-          ]
+          "sightings": [12]
         }
         """;
 
@@ -105,8 +87,7 @@ class BatchControllerTests {
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors.scannerId").exists())
         .andExpect(jsonPath("$.errors.sentAt").exists())
-        .andExpect(jsonPath("$.errors['sightings[0].rssi']").exists())
-        .andExpect(jsonPath("$.errors['sightings[0].seenAt']").exists());
+        .andExpect(jsonPath("$.errors['sightings[0]']").exists());
   }
 
   @Test

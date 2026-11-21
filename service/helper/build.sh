@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds WifiInfo.app (universal arm64 + x86_64 when the toolchain allows it).
 # Requires Xcode Command Line Tools:  xcode-select --install
-# Output: src/floor_lookup/_bin/WifiInfo.app
+# Output: src/scanner/_bin/WifiInfo.app
 #
 # The helper targets macOS 14+, which is where Location Services started
 # gating the BSSID; older systems don't need it.
@@ -11,7 +11,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-APP=../src/floor_lookup/_bin/WifiInfo.app
+APP=../src/scanner/_bin/WifiInfo.app
 rm -rf "$APP" .build
 mkdir -p "$APP/Contents/MacOS" .build
 

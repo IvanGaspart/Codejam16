@@ -11,10 +11,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One batch received from a Scanner. Kept for {@code WINDOW} and used for Floor coverage.
+ * One batch received from a Scanner, holding one RSSI per device it heard during the interval.
+ * Kept for {@code WINDOW} and used for Floor coverage and device counts.
  *
  * <p>{@code bssid} is a plain column, not a reference to {@link AccessPoint}, because batches with
- * an unknown BSSID are still stored (RQ-03).
+ * an unknown BSSID are still stored (RQ-03). A batch with no RSSIs is still stored, since it proves
+ * the Floor is covered (RQ-10).
  */
 @Entity
 @Table(name = "batch", indexes = @Index(columnList = "received_at"))
@@ -30,16 +32,27 @@ public class Batch {
   @Column(nullable = false)
   private String bssid;
 
+  /** Scanner clock; informational only. */
+  @Column(name = "sent_at", nullable = false)
+  private Instant sentAt;
+
+  /** Server clock; the window and coverage are computed from this. */
   @Column(name = "received_at", nullable = false)
   private Instant receivedAt;
+
+  /** Signal strengths in dBm, one per device heard. Its length is the batch's device count. */
+  @Column(nullable = false)
+  private int[] rssis;
 
   /** Required by JPA. */
   protected Batch() {}
 
-  public Batch(UUID scannerId, String bssid, Instant receivedAt) {
+  public Batch(UUID scannerId, String bssid, Instant sentAt, Instant receivedAt, int[] rssis) {
     this.scannerId = scannerId;
     this.bssid = bssid;
+    this.sentAt = sentAt;
     this.receivedAt = receivedAt;
+    this.rssis = rssis.clone();
   }
 
   public Long getId() {
@@ -54,7 +67,15 @@ public class Batch {
     return bssid;
   }
 
+  public Instant getSentAt() {
+    return sentAt;
+  }
+
   public Instant getReceivedAt() {
     return receivedAt;
+  }
+
+  public int[] getRssis() {
+    return rssis.clone();
   }
 }

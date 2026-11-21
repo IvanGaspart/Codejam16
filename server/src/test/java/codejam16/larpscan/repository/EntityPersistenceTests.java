@@ -1,5 +1,6 @@
 package codejam16.larpscan.repository;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -9,7 +10,6 @@ import codejam16.larpscan.domain.AccessPoint;
 import codejam16.larpscan.domain.Batch;
 import codejam16.larpscan.domain.BusynessSnapshot;
 import codejam16.larpscan.domain.Floor;
-import codejam16.larpscan.domain.Sighting;
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -34,7 +34,6 @@ class EntityPersistenceTests {
   @Autowired private FloorRepository floors;
   @Autowired private AccessPointRepository accessPoints;
   @Autowired private BatchRepository batches;
-  @Autowired private SightingRepository sightings;
   @Autowired private BusynessSnapshotRepository snapshots;
 
   @Test
@@ -71,40 +70,39 @@ class EntityPersistenceTests {
   }
 
   @Test
-  void savesBatchWithUnknownBssid() {
-    // No AccessPoint exists for this BSSID; the batch must still be stored (RQ-03)
-    Long id = batches.save(new Batch(SCANNER, "ff:ee:dd:cc:bb:aa", T)).getId();
+  void savesAndReloadsBatchWithRssis() {
+    Long id = batches.save(
+        new Batch(SCANNER, "44:48:c1:a4:1a:50", T.minusSeconds(1), T, new int[] {-67, -72, -80})
+    ).getId();
     em.flush();
     em.clear();
 
     Batch loaded = batches.findById(id).orElseThrow();
     assertEquals(SCANNER, loaded.getScannerId());
-    assertEquals("ff:ee:dd:cc:bb:aa", loaded.getBssid());
+    assertEquals("44:48:c1:a4:1a:50", loaded.getBssid());
+    assertEquals(T.minusSeconds(1), loaded.getSentAt());
     assertEquals(T, loaded.getReceivedAt());
+    assertArrayEquals(new int[] {-67, -72, -80}, loaded.getRssis());
   }
 
   @Test
-  void savesSightingLinkedToItsBatch() {
-    Batch batch = batches.save(new Batch(SCANNER, "44:48:c1:a4:1a:50", T));
-    Long id = sightings.save(
-        new Sighting(batch, "5e:aa:01:23:45:67", -67, T.minusSeconds(6))
-    ).getId();
+  void savesEmptyBatch() {
+    // A batch with no devices still proves coverage (RQ-10)
+    Long id = batches.save(new Batch(SCANNER, "44:48:c1:a4:1a:50", T, T, new int[0])).getId();
     em.flush();
     em.clear();
 
-    Sighting loaded = sightings.findById(id).orElseThrow();
-    assertEquals("5e:aa:01:23:45:67", loaded.getAddress());
-    assertEquals(-67, loaded.getRssi());
-    assertEquals(T.minusSeconds(6), loaded.getSeenAt());
-    assertEquals(batch.getId(), loaded.getBatch().getId());
+    assertArrayEquals(new int[0], batches.findById(id).orElseThrow().getRssis());
   }
 
   @Test
-  void rejectsSightingWithoutBatch() {
-    assertThrows(
-        DataIntegrityViolationException.class,
-        () -> sightings.saveAndFlush(new Sighting(null, "5e:aa:01:23:45:67", -67, T))
-    );
+  void savesBatchWithUnknownBssid() {
+    // No AccessPoint exists for this BSSID; the batch must still be stored (RQ-03)
+    Long id = batches.save(new Batch(SCANNER, "ff:ee:dd:cc:bb:aa", T, T, new int[] {-60})).getId();
+    em.flush();
+    em.clear();
+
+    assertEquals("ff:ee:dd:cc:bb:aa", batches.findById(id).orElseThrow().getBssid());
   }
 
   @Test

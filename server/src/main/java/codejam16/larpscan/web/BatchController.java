@@ -23,7 +23,7 @@ public class BatchController {
   }
 
   /**
-   * Validates and accepts a batch of BLE sightings from a Scanner.
+   * Validates and accepts a batch of RSSIs from a Scanner.
    *
    * @param request validated batch payload
    * @return {@code 202 Accepted} with an empty body

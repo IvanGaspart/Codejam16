@@ -9,6 +9,7 @@ import codejam16.larpscan.domain.Batch;
 import codejam16.larpscan.domain.Floor;
 import codejam16.larpscan.repository.AccessPointRepository;
 import codejam16.larpscan.repository.BatchRepository;
+import codejam16.larpscan.repository.BusynessSnapshotRepository;
 import codejam16.larpscan.repository.FloorRepository;
 import java.time.Clock;
 import java.time.Instant;
@@ -33,6 +34,7 @@ class BuildingControllerTests {
   @Autowired private FloorRepository floors;
   @Autowired private AccessPointRepository accessPoints;
   @Autowired private BatchRepository batches;
+  @Autowired private BusynessSnapshotRepository snapshots;
   @Autowired private Clock clock;
 
   private MockMvc mockMvc;
@@ -88,6 +90,7 @@ class BuildingControllerTests {
   }
 
   private void clearTables() {
+    snapshots.deleteAll();
     batches.deleteAll();
     accessPoints.deleteAll();
     floors.deleteAll();

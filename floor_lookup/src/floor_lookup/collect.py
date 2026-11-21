@@ -1,13 +1,4 @@
-#!/usr/bin/env python3
-"""Collect visible McGill Wi-Fi APs at the current floor into observations.csv.
-
-Usage:
-    python scripts/collect_aps.py --floor 0
-    python scripts/collect_aps.py --floor 1 --min-rssi -70
-
-Appends rows to data/survey/observations.csv, then rewrites
-data/survey/ap_locations.csv (one row per BSSID → strongest floor).
-"""
+"""Collect visible McGill Wi-Fi APs at the current floor (Linux survey walk)."""
 
 from __future__ import annotations
 
@@ -16,12 +7,14 @@ import csv
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT = ROOT / "data" / "survey" / "observations.csv"
-DEFAULT_LOCATIONS = ROOT / "data" / "survey" / "ap_locations.csv"
+# Survey CSVs land under repo /data/ (gitignored on main).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_OUT = _REPO_ROOT / "data" / "survey" / "observations.csv"
+DEFAULT_LOCATIONS = _REPO_ROOT / "data" / "survey" / "ap_locations.csv"
 
 INTERESTING_SSIDS = {
     "wpa.mcgill.ca",
@@ -88,7 +81,6 @@ def connected_info(iface: str) -> tuple[str | None, float | None]:
 
 
 def refresh_scan(iface: str) -> None:
-    """Ask NetworkManager to rescan so iw dump is not stale."""
     try:
         subprocess.run(
             ["nmcli", "device", "wifi", "rescan", "ifname", iface],
@@ -99,13 +91,7 @@ def refresh_scan(iface: str) -> None:
         )
     except (OSError, subprocess.SubprocessError):
         pass
-    # Give the kernel a moment to populate scan dump.
-    try:
-        import time
-
-        time.sleep(2.5)
-    except Exception:
-        pass
+    time.sleep(2.5)
 
 
 def scan_aps(iface: str, min_rssi: float) -> list[dict]:
@@ -162,26 +148,6 @@ def scan_aps(iface: str, min_rssi: float) -> list[dict]:
     return rows
 
 
-def strip_room_columns(path: Path) -> None:
-    """Rewrite observations.csv without room/location columns if present."""
-    if not path.exists():
-        return
-    with path.open(newline="") as f:
-        reader = csv.DictReader(f)
-        if not reader.fieldnames:
-            return
-        if "room" not in reader.fieldnames and "location" not in reader.fieldnames:
-            return
-        rows = [
-            {k: row[k] for k in OBS_FIELDS if k in row}
-            for row in reader
-        ]
-    with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=OBS_FIELDS)
-        writer.writeheader()
-        writer.writerows(rows)
-
-
 def append_observations(
     path: Path,
     *,
@@ -191,7 +157,6 @@ def append_observations(
     collected_at: str,
 ) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
-    strip_room_columns(path)
     write_header = not path.exists() or path.stat().st_size == 0
     with path.open("a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=OBS_FIELDS)
@@ -216,11 +181,8 @@ def append_observations(
 
 
 def reduce_locations(observations: Path, locations: Path) -> int:
-    """One row per BSSID at the floor where RSSI was strongest."""
     if not observations.exists():
         return 0
-
-    strip_room_columns(observations)
 
     best: dict[str, dict] = {}
     counts: dict[str, int] = {}
@@ -256,31 +218,19 @@ def reduce_locations(observations: Path, locations: Path) -> int:
     return len(rows)
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description=__doc__)
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(
+        description="Collect visible McGill APs at a floor into data/survey/ (Linux).",
+    )
     p.add_argument("--floor", type=int, help="Floor number (e.g. 0)")
     p.add_argument("--building", default="trottier")
-    p.add_argument(
-        "--min-rssi",
-        type=float,
-        default=-65.0,
-        help="Drop weaker sightings (default: -65)",
-    )
+    p.add_argument("--min-rssi", type=float, default=-65.0)
     p.add_argument("--out", type=Path, default=DEFAULT_OUT)
     p.add_argument("--locations", type=Path, default=DEFAULT_LOCATIONS)
-    p.add_argument(
-        "--reduce-only",
-        action="store_true",
-        help="Only rebuild ap_locations.csv from existing observations",
-    )
+    p.add_argument("--reduce-only", action="store_true")
     args = p.parse_args(argv)
     if not args.reduce_only and args.floor is None:
         p.error("--floor is required unless --reduce-only")
-    return args
-
-
-def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
 
     if args.reduce_only:
         n = reduce_locations(args.out, args.locations)
@@ -318,7 +268,3 @@ def main(argv: list[str] | None = None) -> int:
     )
     print(f"reduced {n_loc} AP locations → {args.locations}")
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

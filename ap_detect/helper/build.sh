@@ -35,5 +35,6 @@ for arch in "${built[@]}"; do inputs+=(".build/WifiInfo-${arch}"); done
 lipo -create "${inputs[@]}" -output "$APP/Contents/MacOS/WifiInfo"
 cp Info.plist "$APP/Contents/Info.plist"
 
+xattr -cr "$APP"
 codesign --force --deep --sign "${CODESIGN_IDENTITY:--}" "$APP"
 echo "Built $APP (${built[*]})"

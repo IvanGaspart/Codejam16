@@ -41,6 +41,26 @@ Allow the one-time Location Services prompt for **WifiInfo**. After that, `get_c
 
 Linux and Windows need no build step.
 
+### Daemon (systemd, Linux)
+
+Installs `scan-loop` to `~/.local/bin` and enables a **user** unit (BlueZ/session D-Bus):
+
+```bash
+cd service
+# edit secrets after first run if the example was seeded:
+#   ~/.config/larp-scan/env
+bash install.sh
+```
+
+```bash
+systemctl --user status larp-scan.service
+journalctl --user -u larp-scan.service -f
+systemctl --user restart larp-scan.service
+systemctl --user stop larp-scan.service
+```
+
+Re-run `bash install.sh` (or `uv tool install --force .` then `systemctl --user restart larp-scan`) after pulling scanner changes. Linger is enabled so the service can run without an interactive login.
+
 ## CLI
 
 ```bash
@@ -82,6 +102,8 @@ Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packa
 service/
   pyproject.toml          # uv project name: scanner
   uv.lock
+  install.sh              # systemd user unit (Linux)
+  deploy/                 # larp-scan.service + env example
   helper/                 # macOS WifiInfo.app build
   src/scanner/
     wifi.py

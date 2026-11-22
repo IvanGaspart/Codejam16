@@ -3,18 +3,14 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { calculateTrend, effectiveLevel, fetchFloorHistory, isNoData, levelLabel, mockFloorHistory, pctLabel, shortName, sortForList, type BusynessLevel, type FloorEntry, type FloorSort } from "@/lib/larp";
+import { calculateTrend, effectiveLevel, estimateWait, fetchFloorHistory, isNoData, levelLabel, mockFloorHistory, pctLabel, shortName, sortForList, type FloorEntry, type FloorSort } from "@/lib/larp";
 import { levelBg } from "./levels";
 import { ThemeToggle } from "./ThemeToggle";
 
 const STRIP = 64;
-const WAIT: Record<BusynessLevel, [string, string]> = {
-  QUIET: ["none", "head over!"], MODERATE: ["none", "head over!"], BUSY: ["short", "maybe grab a coffee"],
-  FULL: ["likely", "try another floor"], NO_DATA: ["unknown", "no sensors here yet"],
-};
 
-export function FloorView({ floors, initialFloor, originTop, sortMode, preview, onBack }: {
-  floors: FloorEntry[]; initialFloor: number; originTop: number; sortMode: FloorSort; preview: boolean; onBack: () => void;
+export function FloorView({ floors, initialFloor, originTop, sortMode, preview, onBack, onFocusChange }: {
+  floors: FloorEntry[]; initialFloor: number; originTop: number; sortMode: FloorSort; preview: boolean; onBack: () => void; onFocusChange?: (floor: number) => void;
 }) {
   const isMobile = useIsMobile();
   const ordered = sortForList(floors, sortMode);
@@ -30,6 +26,8 @@ export function FloorView({ floors, initialFloor, originTop, sortMode, preview, 
   const scroller = useRef<HTMLDivElement>(null);
   const [focus, setFocus] = useState(() => Math.max(0, ordered.findIndex((f) => f.floor === initialFloor)));
   const leaving = useRef(false);
+  const focusedFloor = ordered[focus]?.floor;
+  useEffect(() => { if (focusedFloor !== undefined) onFocusChange?.(focusedFloor); }, [focusedFloor, onFocusChange]);
   const pull = useRef(0);
 
   const itemH = () => (scroller.current?.clientHeight ?? 0) - STRIP * 2;
@@ -90,8 +88,9 @@ export function FloorView({ floors, initialFloor, originTop, sortMode, preview, 
           const lvl = effectiveLevel(f);
           const nd = isNoData(f);
           const rel = i - focus;
-          const [wait, hint] = WAIT[lvl];
-          const trend = calculateTrend(historyQs[i]?.data ?? []);
+          const history = historyQs[i]?.data ?? [];
+          const { wait, hint } = estimateWait(f, history);
+          const trend = calculateTrend(history);
           const trendLabel = trend
             ? `${trend.change < 0 ? "↘" : trend.change > 0 ? "↗" : "→"}${trend.change === 0 ? " steady" : Math.abs(trend.change) + "%"} last 10 minutes`
             : "trend · collecting history";
@@ -103,13 +102,13 @@ export function FloorView({ floors, initialFloor, originTop, sortMode, preview, 
                 className={`absolute inset-x-0 bottom-0 z-20 flex items-center justify-between px-16 text-sm transition-opacity duration-300 sm:px-20 ${rel === -1 ? "opacity-100" : "pointer-events-none opacity-0"}`}
                 style={{ height: STRIP }}>
                 <span>{shortName(f.buildingName)} floor {f.floor}</span><ChevronUp className="h-6 w-6" />
-                <span>{nd ? <em>no data</em> : <>{pctLabel(f)} <em>{levelLabel(lvl)}</em></>}</span>
+                <span>{nd ? <em>no data</em> : <span className="inline-flex flex-col items-end leading-tight">{pctLabel(f)} full<em className="text-xs">{levelLabel(lvl)}</em></span>}</span>
               </button>
               <button onClick={() => goTo(i)} tabIndex={rel === 1 ? 0 : -1}
                 className={`absolute inset-x-0 top-0 z-20 flex items-center justify-between px-6 text-sm transition-opacity duration-300 sm:px-20 ${rel === 1 ? "opacity-100" : "pointer-events-none opacity-0"}`}
                 style={{ height: STRIP }}>
                 <span>{shortName(f.buildingName)} floor {f.floor}</span><ChevronDown className="h-6 w-6" />
-                <span>{nd ? <em>no data</em> : <>{pctLabel(f)} <em>{levelLabel(lvl)}</em></>}</span>
+                <span>{nd ? <em>no data</em> : <span className="inline-flex flex-col items-end leading-tight">{pctLabel(f)} full<em className="text-xs">{levelLabel(lvl)}</em></span>}</span>
               </button>
 
               {rel === 0 && i > 0 && (
@@ -125,9 +124,9 @@ export function FloorView({ floors, initialFloor, originTop, sortMode, preview, 
                 <h2 className="text-center text-2xl leading-tight sm:text-3xl">
                   <span className="font-bold">{shortName(f.buildingName)}</span><br />floor {f.floor}
                 </h2>
-                <div className="mt-16 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-2">
+                <div className="mt-16 flex flex-col items-center gap-2">
                   {nd ? <span className="text-5xl italic sm:text-6xl">no data</span> : (
-                    <><span className="text-6xl font-bold tabular-nums sm:text-7xl">{f.busynessPct}%</span>
+                    <><span className="text-6xl font-bold tabular-nums sm:text-7xl">{f.busynessPct}% <span className="text-3xl font-normal sm:text-4xl">full</span></span>
                       <em className="text-3xl sm:text-5xl">{levelLabel(lvl)}</em></>
                   )}
                 </div>

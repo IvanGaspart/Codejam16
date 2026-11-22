@@ -18,7 +18,8 @@ export function Splash({ onDone }: { onDone: () => void }) {
   const [fontIndex, setFontIndex] = useState(0);
   const [shade, setShade] = useState<(typeof SHADES)[number]>("bg-splash-coral");
   const offsets = useMemo(() => [0, 1, 2, 3].map((i) => ({ y: [-6, 10, -2, 6][i] ?? 0, r: [-3, 2, -1.5, 3][i] ?? 0 })), []);
-  const [particles, setParticles] = useState<{ e: string; x: number; y: number; r: number; s: number }[]>([]);
+  const [particles, setParticles] = useState<{ x: number; y: number; r: number; s: number }[]>([]);
+  const [particleEmoji, setParticleEmoji] = useState(EMOJIS[0]!);
   const figlet = FIGLETS[fontIndex] ?? FIGLETS[0]!;
   const maxChars = Math.max(...figlet.letters.flatMap((letter) => letter.map((row) => row.length)));
 
@@ -28,9 +29,10 @@ export function Splash({ onDone }: { onDone: () => void }) {
     setShade(SHADES[Math.floor(Math.random() * SHADES.length)] ?? SHADES[0]);
     setState("show");
     const t1 = setTimeout(() => {
+      setParticleEmoji(EMOJIS[Math.floor(Math.random() * EMOJIS.length)]!);
       setParticles(Array.from({ length: 64 }, () => {
         const a = Math.random() * Math.PI * 2, d = 220 + Math.random() * 600;
-        return { e: EMOJIS[Math.floor(Math.random() * EMOJIS.length)]!, x: Math.cos(a) * d, y: Math.sin(a) * d, r: (Math.random() - 0.5) * 720, s: 0.8 + Math.random() * 1.7 };
+        return { x: Math.cos(a) * d, y: Math.sin(a) * d, r: (Math.random() - 0.5) * 720, s: 0.8 + Math.random() * 1.7 };
       }));
       setState("burst");
       onDone();
@@ -74,7 +76,7 @@ export function Splash({ onDone }: { onDone: () => void }) {
           initial={{ x: 0, y: 0, opacity: 1, scale: 0.2, rotate: 0 }}
           animate={{ x: p.x, y: p.y + 120, opacity: 0, scale: p.s, rotate: p.r }}
           transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}>
-          {p.e}
+          {particleEmoji}
         </motion.span>
       ))}
     </div>

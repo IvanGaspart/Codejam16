@@ -227,3 +227,18 @@
 .bldg { fill: var(--color-foreground); fill-opacity: 0.18; stroke: var(--color-foreground); stroke-width: 1.5; transition: fill 0.3s, fill-opacity 0.3s; cursor: pointer; }
 .bldg:hover { fill-opacity: 0.35; }
 .bldg.selected { fill: var(--color-accent); fill-opacity: 0.9; stroke: var(--color-accent); }
+
+.xray-ap { fill: var(--color-accent); fill-opacity: 1; stroke: var(--color-background); stroke-width: 1.5; }
+.xray-far { fill: var(--quiet); fill-opacity: 0.08; stroke: var(--quiet); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.xray-close { fill: var(--quiet); fill-opacity: 0.3; stroke: var(--quiet); stroke-width: 2; }
+.xray-far.stale, .xray-close.stale { fill: var(--color-muted-foreground); stroke: var(--color-muted-foreground); fill-opacity: 0.05; }
+.xray-label > div {
+  transform: translate(-50%, -50%); width: max-content; white-space: pre; text-align: center;
+  font-family: var(--font-mono); font-size: 10px; line-height: 1.35; padding: 2px 5px; border-radius: 4px;
+  background: color-mix(in oklab, var(--color-background) 85%, transparent); color: var(--color-foreground);
+}
+.xray-label.far > div { transform: translate(-50%, -100%); opacity: 0.8; }
+.xray-on .leaflet-tooltip-pane .map-label { opacity: 0 !important; visibility: hidden !important; }
+.xray-scanner { fill: var(--color-foreground); fill-opacity: 0.85; stroke: var(--color-background); stroke-width: 2; cursor: pointer; }
+.xray-scanner.selected { fill: var(--color-accent); fill-opacity: 1; stroke-width: 3; }
+.xray-scanner.stale { fill: var(--color-muted-foreground); }

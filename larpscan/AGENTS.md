@@ -33,3 +33,4 @@ use the editor.
 - All data comes from the external REST API in `src/lib/larp.ts` (`VITE_API_BASE_URL`); no Lovable Cloud, because the backend is a separate Spring Boot service.
 - Busyness rules (thresholds, sorting, no-data handling) live only in `src/lib/larp.ts` and are covered by `src/lib/larp.test.ts`, so UI code never re-derives them.
 - The app is one page (`src/routes/index.tsx`) with splash / main / floor states as overlays, so the expand/collapse animations stay continuous.
+- X-Ray (scanner/AP overlay) logic lives in `src/lib/xray.ts`, mirroring the backend's overlap estimate so the map can show its working; constants come from the server with local fallbacks.

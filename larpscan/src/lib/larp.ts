@@ -119,8 +119,8 @@ export function mockFloors(buildingId: string, at = Date.now()): FloorBusyness[]
 
 export function mockFloorHistory(buildingId: string, floor: number, at = Date.now()): HistoryPoint[] {
   const latest = Math.floor(at / 60000) * 60000;
-  return Array.from({ length: 16 }, (_, i) => {
-    const timestamp = latest - (15 - i) * 60000;
+  return Array.from({ length: 21 }, (_, i) => {
+    const timestamp = latest - (20 - i) * 60000;
     return { at: new Date(timestamp).toISOString(), busynessPct: mockPct(buildingId, floor, timestamp), covered: true };
   });
 }
@@ -255,3 +255,40 @@ export const BUILDING_SHAPES: Record<string, [number, number][]> = {
   ],
 };
 export const MAP_CENTER: [number, number] = [45.5051, -73.5775];
+
+export interface WaitEstimate { wait: string; hint: string; minutes: number | null }
+const FULL_AT = 85;
+
+/** Busyness change per minute over [end - minutes, end], or null without enough history. */
+function rate(points: HistoryPoint[], endMs: number, minutes: number): number | null {
+  const covered = points.filter((p) => p.covered && Date.parse(p.at) <= endMs).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  const last = covered.at(-1);
+  if (!last) return null;
+  const lastMs = Date.parse(last.at);
+  const prev = [...covered].reverse().find((p) => Date.parse(p.at) <= lastMs - minutes * 60000);
+  if (!prev) return null;
+  return (last.busynessPct - prev.busynessPct) / ((lastMs - Date.parse(prev.at)) / 60000);
+}
+
+/**
+ * Full floors: project busyness with p(t) = p0 + v·t + ½·a·t², where v is the last-10-minute rate and
+ * a is how that rate changed versus the 10 minutes before. Returns minutes until below FULL.
+ */
+export function estimateWait(f: FloorBusyness, history: HistoryPoint[]): WaitEstimate {
+  const lvl = effectiveLevel(f);
+  if (lvl === "NO_DATA") return { wait: "unknown", hint: "no sensors here yet", minutes: null };
+  if (lvl === "QUIET" || lvl === "MODERATE") return { wait: "none", hint: "head over!", minutes: null };
+  if (lvl === "BUSY") return { wait: "short", hint: "maybe grab a coffee", minutes: null };
+  const latest = history.filter((p) => p.covered).map((p) => Date.parse(p.at)).filter(Number.isFinite).sort((a, b) => a - b).at(-1);
+  const v = latest === undefined ? null : rate(history, latest, 10);
+  if (v === null || latest === undefined) return { wait: "likely", hint: "try another floor", minutes: null };
+  const vPrev = rate(history, latest - 10 * 60000, 10);
+  const a = vPrev === null ? 0 : (v - vPrev) / 10;
+  for (let t = 1; t <= 60; t++) {
+    if (f.busynessPct + v * t + 0.5 * a * t * t < FULL_AT) {
+      const minutes = t;
+      return { wait: `~${minutes} min`, hint: "it's emptying out", minutes };
+    }
+  }
+  return { wait: "likely", hint: "try another floor", minutes: null };
+}

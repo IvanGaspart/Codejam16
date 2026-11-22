@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildingBusyness, calculateTrend, levelFromPct, mergeLibraryBuildings, mockFloorHistory, mockFloors,
-  pctLabel, placeholderFloors, sortForList, type FloorBusyness,
+  estimateWait, pctLabel, placeholderFloors, sortForList, type FloorBusyness,
 } from "./larp";
 const f = (floor: number, pct: number, covered = true): FloorBusyness => ({
   floor, capacity: 100, covered, scanners: 1, estimatedPeople: pct, busynessPct: pct, level: covered ? levelFromPct(pct) : "NO_DATA",
@@ -66,7 +66,21 @@ describe("dynamic preview data", () => {
   });
   it("provides enough fake history for a ten-minute trend", () => {
     const history = mockFloorHistory("burnside", 4, start);
-    expect(history).toHaveLength(16);
+    expect(history).toHaveLength(21);
     expect(calculateTrend(history)).not.toBeNull();
+  });
+});
+
+describe("wait estimate", () => {
+  const pt = (min: number, pct: number) => ({ at: new Date(Date.UTC(2026, 0, 1, 12, min)).toISOString(), busynessPct: pct, covered: true });
+  const full = { ...f(1, 94), level: "FULL" as const };
+  it("a full floor at 94% dropping 10% per 10 minutes frees up in about 10 minutes", () => {
+    expect(estimateWait(full, [pt(0, 114), pt(10, 104), pt(20, 94)]).minutes).toBe(10);
+  });
+  it("an accelerating drop frees the floor sooner", () => {
+    expect(estimateWait(full, [pt(0, 98), pt(10, 104), pt(20, 94)]).minutes).toBe(7);
+  });
+  it("a full floor that is not dropping keeps a likely wait", () => {
+    expect(estimateWait(full, [pt(0, 90), pt(10, 92), pt(20, 94)])).toMatchObject({ wait: "likely", minutes: null });
   });
 });

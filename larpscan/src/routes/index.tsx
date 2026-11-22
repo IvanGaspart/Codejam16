@@ -1,12 +1,13 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ClientOnly, createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { SlidersHorizontal, X } from "lucide-react";
+import { ScanEye, SlidersHorizontal, X } from "lucide-react";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   MOCK_BUILDINGS, buildingBusyness, fetchBuildings, fetchFloors, loadSnapshot, matchesSearch, mergeLibraryBuildings,
   mockFloors, placeholderFloors, saveSnapshot, sortForList, type FloorEntry, type FloorSort, type LiveSnapshot,
 } from "@/lib/larp";
+import { ACCESS_POINTS, DEFAULT_CONSTANTS, computeDedup, fetchConstants, fetchScanners, mockScanners, scannerNames } from "@/lib/xray";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Splash } from "@/components/larp/Splash";
 import { ThemeToggle } from "@/components/larp/ThemeToggle";
@@ -20,9 +21,9 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "larp — live building busyness" },
-      { name: "description", content: "find a quiet floor: live busyness for every floor of the Trottier Building." },
+      { name: "description", content: "find a quiet place to study: live busyness for floors across McGill study spaces." },
       { property: "og:title", content: "larp — live building busyness" },
-      { property: "og:description", content: "find a quiet floor: live busyness for every floor of the Trottier Building." },
+      { property: "og:description", content: "find a quiet place to study: live busyness for floors across McGill study spaces." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
@@ -55,6 +56,8 @@ function Index() {
   const [snapshot, setSnapshot] = useState<LiveSnapshot | null>(null);
   const [lastSeen, setLastSeen] = useState<number | null>(null);
   const [serverOnline, setServerOnline] = useState(false);
+  const [xray, setXray] = useState(false);
+  const [focusedFloor, setFocusedFloor] = useState<number | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const slow = useSlowConnection(latency);
   const onSplashDone = useCallback(() => setReady(true), []);
@@ -69,6 +72,11 @@ function Index() {
       if (event.altKey && event.code === "KeyP") {
         event.preventDefault();
         setUseMock((value) => !value);
+      }
+      const typing = event.target instanceof HTMLElement && /^(INPUT|TEXTAREA)$/.test(event.target.tagName);
+      if (event.shiftKey && event.code === "KeyX" && !typing && !event.altKey && !event.metaKey && !event.ctrlKey && !window.matchMedia("(max-width: 767px)").matches) {
+        event.preventDefault();
+        setXray((value) => !value);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -154,6 +162,49 @@ function Index() {
   const loading = buildingsQ.isLoading || floorQs.some((q) => q.isLoading);
   const error = !useMock && (buildingsQ.isError || floorQs.some((q) => q.isError));
 
+  const mapVisible = !open || !isMobile;
+  const xrayOn = xray && mapVisible && !isMobile;
+  const xrayBuildings = Object.keys(ACCESS_POINTS);
+  const scannerQs = useQueries({
+    queries: xrayBuildings.map((id) => ({
+      queryKey: ["scanners", id, useMock],
+      queryFn: () => (useMock ? Promise.resolve(mockScanners(id)) : fetchScanners(id)),
+      enabled: xrayOn, refetchInterval: 5000, retry: 1,
+    })),
+  });
+  const constantsQ = useQuery({
+    queryKey: ["xray-constants", useMock],
+    queryFn: () => (useMock ? Promise.resolve(DEFAULT_CONSTANTS) : fetchConstants()),
+    enabled: xrayOn, retry: 1, staleTime: 300000,
+  });
+  const constants = constantsQ.data ?? DEFAULT_CONSTANTS;
+  const scannerStamp = scannerQs.map((q) => q.dataUpdatedAt).join(",");
+  // Which building floors X-Ray shows: the focused floor in desktop floor view, the listed floors in search, else all.
+  const xrayFilter = useMemo(() => {
+    if (open && !isMobile) return (b: string, f: number | null) => b === open.buildingId && f === focusedFloor;
+    if (expanded) { const keys = new Set(listed.map((f) => `${f.buildingId}:${f.floor}`)); return (b: string, f: number | null) => keys.has(`${b}:${f}`); }
+    return () => true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isMobile, focusedFloor, expanded, listed.map((f) => `${f.buildingId}:${f.floor}`).join(",")]);
+  const xrayData = useMemo(() => {
+    if (!xrayOn) return null;
+    const all = xrayBuildings.flatMap((id, i) => (scannerQs[i]?.data ?? []).map((s) => ({ id, s })));
+    const scanners = all.map((x) => x.s);
+    const names = scannerNames(scanners);
+    const { stats, floors } = computeDedup(scanners, constants);
+    const keep = all.map((x) => xrayFilter(x.id, x.s.floor));
+    const aps = xrayBuildings.flatMap((id) => (ACCESS_POINTS[id] ?? []).filter((a) => xrayFilter(id, a.floor)));
+    const shownFloors = new Set(all.filter((_, i) => keep[i]).map((x) => x.s.floor));
+    return {
+      overlay: { aps, scanners: scanners.filter((_, i) => keep[i]), names: names.filter((_, i) => keep[i]), stats: stats.filter((_, i) => keep[i]), constants },
+      floors: floors.filter((f) => shownFloors.has(f.floor)),
+      unplaced: scanners.map((s, i) => ({ s, name: names[i], x: stats[i] })).filter((v, i) => keep[i] && (v.s.lat == null || v.s.lon == null)),
+      error: !useMock && scannerQs.some((q) => q.isError),
+      total: scanners.length,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [xrayOn, scannerStamp, constants, xrayFilter, useMock]);
+
   const openFloor = (f: FloorEntry) => {
     const top = panelRef.current?.getBoundingClientRect().top ?? window.innerHeight / 2;
     setOpen({ buildingId: f.buildingId, floor: f.floor, originTop: Math.min(0.95, Math.max(0, top / window.innerHeight)) });
@@ -177,9 +228,37 @@ function Index() {
           transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}>
           <ClientOnly fallback={<div className="h-full w-full bg-muted" />}>
             <Suspense fallback={<div className="h-full w-full bg-muted" />}>
-              <BuildingMap buildings={mapBuildings} selectedId={selectedId} onSelect={selectFromMap} />
+              <BuildingMap buildings={mapBuildings} selectedId={selectedId} onSelect={selectFromMap}
+                focusId={open && !isMobile ? open.buildingId : null} xray={xrayData?.overlay ?? null} />
             </Suspense>
           </ClientOnly>
+          <button onClick={() => setXray((v) => !v)} aria-pressed={xray} title="x-ray (shift-x)"
+            className={`absolute right-3 top-16 z-[500] hidden items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs shadow-soft backdrop-blur transition-colors md:flex ${xray ? "bg-foreground text-background" : "bg-background/85 text-foreground hover:bg-background"}`}>
+            <ScanEye className="h-3.5 w-3.5" /> x-ray <kbd className="hidden opacity-60 md:inline">⇧X</kbd>
+          </button>
+          <AnimatePresence>
+            {xrayData && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+                className="no-scrollbar absolute right-3 top-28 z-[500] max-h-[40%] w-64 overflow-y-auto rounded-xl border border-border bg-background/90 p-3 text-[11px] shadow-soft backdrop-blur md:max-h-[60%] md:w-72">
+                <p className="mb-2 font-bold">x-ray · deduplication</p>
+                {xrayData.error && <p className="mb-2 italic text-muted-foreground">no scanner feed from the server yet</p>}
+                {xrayData.floors.length === 0 ? <p className="italic text-muted-foreground">no scanners in view</p> : (
+                  <table className="w-full tabular-nums">
+                    <thead className="text-muted-foreground"><tr><th className="text-left font-normal">floor</th><th className="text-right font-normal">scn</th><th className="text-right font-normal">raw</th><th className="text-right font-normal">overlap</th><th className="text-right font-normal">devices</th><th className="text-right font-normal">people</th></tr></thead>
+                    <tbody>{xrayData.floors.map((f) => (
+                      <tr key={f.floor}><td>{f.floor}</td><td className="text-right">{f.scanners}</td><td className="text-right">{f.raw.toFixed(1)}</td>
+                        <td className="text-right text-trend-good">{f.overlap > 0.005 ? "−" + f.overlap.toFixed(1) : "0"}</td>
+                        <td className="text-right font-bold">{f.devices.toFixed(1)}</td><td className="text-right">{f.people.toFixed(1)}</td></tr>
+                    ))}</tbody>
+                  </table>
+                )}
+                {xrayData.unplaced.length > 0 && (
+                  <p className="mt-2 text-muted-foreground">no position: {xrayData.unplaced.map((u) => `${u.name} (${u.x?.w.toFixed(1)})`).join(", ")} · counted by the busiest one</p>
+                )}
+                <p className="mt-2 italic text-muted-foreground">close ring = strong signal, dashed far ring = weaker (weighted lower).</p>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
 
         <div className={`relative z-10 flex flex-col md:order-1 md:h-full md:shrink-0 md:border-r md:border-border md:bg-background md:transition-[width] md:duration-500 ${expanded ? "md:w-1/2" : "md:w-1/3"}`}>
@@ -247,7 +326,7 @@ function Index() {
         <AnimatePresence>
           {open && (
             <FloorView key="floor" floors={allFloors.filter((f) => f.buildingId === open.buildingId)}
-              initialFloor={open.floor} originTop={open.originTop} sortMode={sortMode} preview={useMock} onBack={() => setOpen(null)} />
+              initialFloor={open.floor} originTop={open.originTop} sortMode={sortMode} preview={useMock} onBack={() => setOpen(null)} onFocusChange={setFocusedFloor} />
           )}
         </AnimatePresence>
       </main>

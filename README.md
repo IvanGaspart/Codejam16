@@ -32,7 +32,7 @@ LARP-scan saves you from unfortunate library larping by allowing you to gauge st
 flowchart LR
     Scanner["Scanner service"] -->|"Bluetooth and Wi-Fi readings"| Server["Occupancy server"]
     Server <-->|"Batches and floor snapshots"| Database[("PostgreSQL")]
-    Frontend["Front-end"] -->|"Requests occupancy, history, and X-Ray data"| Server
+    Frontend["Front-end"] <--|"Requests occupancy, history, and X-Ray data"| Server
 ```
 
 ## Local setup

@@ -3,8 +3,11 @@ package codejam16.larpscan.config;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Positive;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 import org.springframework.validation.annotation.Validated;
 
 /**
@@ -14,16 +17,27 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "larp")
 public record LarpProperties(
-		@NotBlank String apiKey,
-		@Valid Cors cors,
-		@Min(1) int windowSeconds,
-		@Positive double k,
-		@Min(1000) long snapshotIntervalMs,
-		@Min(1) int smoothingSnapshots
-) {
-	/**
-	 * CORS settings for public GET endpoints consumed by the Lovable frontend.
-	 */
-	public record Cors(@NotBlank String allowedOrigin) {
-	}
-}
+        @NotBlank String apiKey,
+        @Valid Cors cors,
+        @Min(1) int windowSeconds,
+        @Positive double k,
+        @Min(1000) long snapshotIntervalMs,
+        @Min(1) int smoothingSnapshots
+        ) {
+    /**
+     * CORS settings for public GET endpoints consumed by the Lovable frontend.
+     */
+    public record Cors(@NotEmpty List<@NotBlank String> allowedOrigins) {
+        @ConstructorBinding
+        public Cors {
+		}
+        /**
+         * Convenience constructor for single-origin callers and unit tests.
+         *
+         * @param allowedOrigin single allowed origin pattern
+         */
+        public Cors(String allowedOrigin) {
+            this(allowedOrigin == null ? List.of() : List.of(allowedOrigin));
+        }
+    }
+        }

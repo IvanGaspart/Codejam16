@@ -7,6 +7,7 @@ import codejam16.larpscan.config.LarpProperties;
 import codejam16.larpscan.domain.AccessPoint;
 import codejam16.larpscan.domain.Batch;
 import codejam16.larpscan.domain.BusynessLevel;
+import codejam16.larpscan.domain.BusynessSnapshot;
 import codejam16.larpscan.domain.Floor;
 import codejam16.larpscan.repository.AccessPointRepository;
 import codejam16.larpscan.repository.BatchRepository;
@@ -25,11 +26,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
+/**
+ * Checks {@code /floors} results and smoothing over snapshots against H2, with
+ * {@code WINDOW = 120 s}, {@code K = 2.5} and {@code SMOOTHING_SNAPSHOTS = 5}. A batch of 85
+ * devices on Floor 1 (capacity 120) gives a live {@code 28}%.
+ */
 @DataJpaTest
 @ActiveProfiles("test")
 class JpaBuildingQueryServiceTests {
 
   private static final Instant NOW = Instant.parse("2026-11-21T14:03:16Z");
+  private static final String BUILDING = "trottier";
   private static final String AP_FLOOR_1 = "44:48:c1:a4:1a:50";
   private static final UUID SCANNER = UUID.fromString("3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab");
 
@@ -42,9 +49,9 @@ class JpaBuildingQueryServiceTests {
 
   @BeforeEach
   void setUp() {
-    floors.save(new Floor("trottier", 2, 90));
-    floors.save(new Floor("trottier", 1, 120));
-    accessPoints.save(new AccessPoint(AP_FLOOR_1, "trottier", 1));
+    floors.save(new Floor(BUILDING, 2, 90));
+    floors.save(new Floor(BUILDING, 1, 120));
+    accessPoints.save(new AccessPoint(AP_FLOOR_1, BUILDING, 1));
     LarpProperties props =
         new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5);
     Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -52,6 +59,8 @@ class JpaBuildingQueryServiceTests {
         new BusynessCalculator(batches, floors, accessPoints, props),
         new FloorHistoryService(snapshots, floors, clock),
         floors,
+        snapshots,
+        props,
         clock
     );
   }
@@ -65,21 +74,111 @@ class JpaBuildingQueryServiceTests {
   }
 
   @Test
-  void listsFloorsAtTheClockInstant() {
-    Instant recent = NOW.minusSeconds(30);
-    batches.save(new Batch(SCANNER, AP_FLOOR_1, recent, recent, new int[85]));
+  void fallsBackToLivePctWithoutSnapshots() {
+    coverFloor1();
 
     assertEquals(
         List.of(
             new FloorBusynessResponse(1, 120, true, 34, 28, BusynessLevel.QUIET),
             new FloorBusynessResponse(2, 90, false, 0, 0, BusynessLevel.NO_DATA)
         ),
-        service.listFloors("trottier")
+        service.listFloors(BUILDING)
     );
+  }
+
+  @Test
+  void fallsBackToLivePctWhenRecentSnapshotsAreAllUncovered() {
+    coverFloor1();
+    snapshot(1, 1, 0, false);
+    snapshot(1, 2, 0, false);
+
+    assertEquals(28, floor(1).busynessPct());
+  }
+
+  @Test
+  void averagesTheLastSmoothingSnapshotsOfTheFloor() {
+    coverFloor1();
+    snapshot(1, 1, 10, true);
+    snapshot(1, 2, 20, true);
+    snapshot(1, 3, 30, true);
+    snapshot(1, 4, 40, true);
+    snapshot(1, 5, 50, true);
+    snapshot(1, 6, 100, true);
+    snapshot(2, 1, 90, true);
+
+    FloorBusynessResponse f1 = floor(1);
+    assertEquals(30, f1.busynessPct());
+    assertEquals(BusynessLevel.MODERATE, f1.level());
+    assertEquals(34, f1.estimatedPeople());
+    assertEquals(true, f1.covered());
+  }
+
+  @Test
+  void leavesUncoveredSnapshotsOutOfTheMean() {
+    coverFloor1();
+    snapshot(1, 1, 40, true);
+    snapshot(1, 2, 0, false);
+    snapshot(1, 3, 50, true);
+    snapshot(1, 4, 0, false);
+    snapshot(1, 5, 0, false);
+    snapshot(1, 6, 100, true);
+
+    assertEquals(45, floor(1).busynessPct());
+  }
+
+  @Test
+  void reportsNoDataWhenLiveCoverageIsMissingDespiteSnapshots() {
+    snapshot(2, 1, 80, true);
+    snapshot(2, 2, 80, true);
+
+    assertEquals(
+        new FloorBusynessResponse(2, 90, false, 0, 0, BusynessLevel.NO_DATA),
+        floor(2)
+    );
+  }
+
+  @Test
+  void derivesLevelFromSmoothedPct() {
+    coverFloor1();
+    snapshot(1, 1, 84, true);
+    snapshot(1, 2, 86, true);
+
+    FloorBusynessResponse f1 = floor(1);
+    assertEquals(85, f1.busynessPct());
+    assertEquals(BusynessLevel.FULL, f1.level());
+  }
+
+  @Test
+  void roundsTheMeanHalfUp() {
+    coverFloor1();
+    snapshot(1, 1, 10, true);
+    snapshot(1, 2, 11, true);
+    assertEquals(11, floor(1).busynessPct());
+
+    snapshot(1, 3, 10, true);
+    assertEquals(10, floor(1).busynessPct());
   }
 
   @Test
   void rejectsUnknownBuilding() {
     assertThrows(BuildingNotFoundException.class, () -> service.listFloors("redpath"));
+  }
+
+  private void coverFloor1() {
+    Instant recent = NOW.minusSeconds(30);
+    batches.save(new Batch(SCANNER, AP_FLOOR_1, recent, recent, new int[85]));
+  }
+
+  private void snapshot(int floor, int minutesAgo, int pct, boolean covered) {
+    snapshots.save(
+        new BusynessSnapshot(BUILDING, floor, NOW.minusSeconds(60L * minutesAgo), pct, covered)
+    );
+  }
+
+  private FloorBusynessResponse floor(int floor) {
+    return service.listFloors(BUILDING).stream()
+        .filter(f -> f.floor() == floor)
+        .findFirst()
+        .orElseThrow();
   }
 }

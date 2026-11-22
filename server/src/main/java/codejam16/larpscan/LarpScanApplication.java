@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Main entry point for the LARP-scan backend server.
- * Enables Spring's task scheduler for periodic busyness snapshots and sighting expiry jobs,
+ * Enables Spring's task scheduler for periodic busyness snapshots and batch expiry jobs,
  * and registers typed {@link LarpProperties}.
  */
 @SpringBootApplication

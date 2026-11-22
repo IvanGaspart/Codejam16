@@ -9,3 +9,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+larp:
+  api-key: test-api-key
+  # Keep the scheduled snapshot job from firing during a test run; tests call snapshot() directly
+  snapshot-interval-ms: 86400000

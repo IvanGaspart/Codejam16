@@ -52,7 +52,8 @@ class BusynessSnapshotJobTests {
     floors.save(new Floor("redpath", 1, 50));
     accessPoints.save(new AccessPoint(AP_FLOOR_1, BUILDING, 1));
     LarpProperties props =
-        new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5);
+        new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5,
+            3.0, -65, 8.0, -80, 0.8, -40, 3.0);
     job = new BusynessSnapshotJob(
         new BusynessCalculator(batches, floors, accessPoints, props),
         snapshots,

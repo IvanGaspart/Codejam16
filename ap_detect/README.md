@@ -12,8 +12,17 @@ Get the **BSSID** (and SSID, when available) of the Wi-Fi access point you are c
 
 ```bash
 uv run python -m ap_detect              # prints the same dict
+uv run python -m ap_detect --scan       # nearby APs: [{bssid, ssid, rssi}, ...]
 IW_DEBUG=1 uv run python -m ap_detect   # shows which backend answered and why others failed
 ```
+
+```python
+from ap_detect import scan_nearby_aps
+scan_nearby_aps()
+# [{'bssid': '44:48:c1:a4:1a:50', 'ssid': 'wpa.mcgill.ca', 'rssi': -52}, ...]
+```
+
+On macOS, `--scan` uses CoreWLAN / WifiInfo.app with Location Services (rebuild the helper after pulling so it includes `--scan`). On Linux it uses `iw` scan dump.
 
 ## Install
 

@@ -44,15 +44,36 @@ public class Batch {
   @Column(nullable = false)
   private int[] rssis;
 
+  /** Scanner position trilaterated from nearby APs at ingest; {@code null} when unknown. */
+  private Double latitude;
+
+  /** See {@link #latitude}. */
+  private Double longitude;
+
   /** Required by JPA. */
   protected Batch() {}
 
+  /** Creates a batch without a Scanner position. */
   public Batch(UUID scannerId, String bssid, Instant sentAt, Instant receivedAt, int[] rssis) {
+    this(scannerId, bssid, sentAt, receivedAt, rssis, null, null);
+  }
+
+  public Batch(
+      UUID scannerId,
+      String bssid,
+      Instant sentAt,
+      Instant receivedAt,
+      int[] rssis,
+      Double latitude,
+      Double longitude
+  ) {
     this.scannerId = scannerId;
     this.bssid = bssid;
     this.sentAt = sentAt;
     this.receivedAt = receivedAt;
     this.rssis = rssis.clone();
+    this.latitude = latitude;
+    this.longitude = longitude;
   }
 
   public Long getId() {
@@ -77,5 +98,13 @@ public class Batch {
 
   public int[] getRssis() {
     return rssis.clone();
+  }
+
+  public Double getLatitude() {
+    return latitude;
+  }
+
+  public Double getLongitude() {
+    return longitude;
   }
 }

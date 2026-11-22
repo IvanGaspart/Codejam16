@@ -8,6 +8,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
+    "ap-detect",
     "bleak>=1.0.0",
     "httpx>=0.27.0",
     "pyobjc-framework-corewlan>=13.0 ; sys_platform == 'darwin'",
@@ -16,7 +17,20 @@ dependencies = [
 [project.scripts]
 predict-floor = "scanner.predict:main"
 collect-aps = "scanner.collect:main"
+map-aps = "scanner.map_ap:main"
 scan-loop = "scanner.scan_loop:main"
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[tool.uv.sources]
+# Non-editable: copies into site-packages. Editable .pth files break when the
+# venv lives under iCloud Drive (UF_HIDDEN → Python 3.13 "Skipping hidden .pth").
+ap-detect = { path = "../ap_detect", editable = false }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 
 [build-system]
 requires = ["hatchling>=1.25"]

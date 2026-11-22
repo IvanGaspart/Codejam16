@@ -12,29 +12,27 @@ LARP-scan **scanner** package: predict Trottier floor from Wi-Fi BSSID, sniff ne
 
 ```bash
 cd service
-uv sync
+# required if the repo is under iCloud Documents (see Install)
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"
+uv sync --group dev
 uv run predict-floor
 uv run scan-loop
+uv run map-aps --help
 uv run python -m scanner
 ```
 
 ## Install
 
-```bash
-cd service
-uv sync
-```
-
 On macOS this also installs `pyobjc-framework-CoreWLAN`.
 
-**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` and `~/Desktop` with "Desktop & Documents Folders" on), iCloud sets the macOS `hidden` flag on every dot-directory, including `.venv`, a few seconds after it is written, and Python 3.13+ ignores hidden `.pth` files. The editable install `uv sync` creates is a `.pth`, so every `uv run …` fails with `ModuleNotFoundError: No module named 'scanner'` even though `uv sync` reports success (it works for a few seconds right after a sync, then stops). `chflags nohidden` is undone by iCloud within seconds. Put the environment outside the synced tree instead, before `uv sync`:
+**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` / `~/Desktop` with Desktop & Documents Folders on), iCloud sets `UF_HIDDEN` on files inside dotted dirs like `.venv`. Python 3.13+ then logs `Skipping hidden .pth file` and editable installs fail (`ModuleNotFoundError`) even though `uv sync` succeeded. `chflags nohidden` is undone within seconds. Before `uv sync`:
 
 ```bash
 export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"   # add to ~/.zshrc
-uv sync
+uv sync --group dev
 ```
 
-Check with `ls -lO .venv/lib/python3.13/site-packages/*.pth`: a `hidden` column means you're affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`, which iCloud doesn't touch.
+Check with `ls -lO "$UV_PROJECT_ENVIRONMENT/lib/python3.13/site-packages/"*.pth` — a `hidden` column means you're still affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`.
 
 ### macOS: build the helper (once)
 
@@ -103,15 +101,28 @@ uv run scan-loop --no-post
 
 # survey walk (Linux): append visible APs at a floor into ../data/survey/
 uv run collect-aps --floor 3
+
+# map labelled APs → BSSID (macOS + Linux; uses ap_detect scan)
+# rebuild ap_detect WifiInfo.app first on macOS 14+: (cd ../ap_detect && bash helper/build.sh)
+uv run map-aps --authorize          # macOS Location Services once
+uv run map-aps trottier 3           # loop: type an AP ID, Enter to stop polling, pick a candidate
+uv run map-aps trot 3 12            # map ID 12 once (building prefixes are fine)
+uv run map-aps trottier 3 -n 4 -y   # auto-stop after 4 fresh scans and save the top candidate
+uv run map-aps trottier --list      # show saved mappings
 ```
+
+`map-aps` polls nearby APs and ranks candidates by how often each was the strongest, then by mean RSSI. It shows the top 5 (`-k N`), and you pick one to save (Enter = #1, `r` = poll again, `s` = skip). BSSIDs that differ only in the last hex digit (the 5 SSIDs of one radio) are grouped, and the lowest one is stored (`--no-group` turns this off). macOS refreshes scan results only every ~3–10 s and returns cached copies in between, so polling runs every 0.5 s and only fresh scans are counted. The first scan of a cycle takes ~9 s.
+
+In the loop: Enter reuses the suggested next ID (12 → 13), `f 4` switches floor, `ls` / `ls all` lists mappings, and `q` quits. Each mapping is written to `service/ap_bssid_<building>.csv` (`ID,floor_number,bssid`, a foreign key to a teammate's `ap_gps_<building>.csv`) as soon as it is saved, deduped per ID+floor with the most recent winning.
 
 Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
 
 ```json
-{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72] }
+{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72],
+  "aps": [{ "bssid": "44:48:c1:a4:1a:52", "rssi": -48 }] }
 ```
 
-`sightings` is RSSI ints only (may be `[]`). Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
+`sightings` is raw RSSI ints only (may be `[]`); the server splits them into close/far strata with its own thresholds (`larp.close-rssi` / `larp.far-rssi`), so keep `RSSI_FLOOR` (-80) ≤ `larp.far-rssi`. `aps` is the nearby Wi-Fi APs from `ap_detect.scan_nearby_aps()` (lowercase BSSID, strongest per BSSID, strongest-first, ≤ 64, `[]` if the scan fails) for server-side trilateration. Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
 
 Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packaged lookup lives in `src/scanner/data/`.
 
@@ -148,6 +159,6 @@ service/
 | `predict` | Floor lookup + `predict-floor` CLI |
 | `collect` | Linux survey walk CLI |
 | `ble` | Bleak scan buffer (RSSI floor, no names) |
-| `scan_loop` | Periodic floor + BLE + POST + `scan-loop` CLI |
+| `scan_loop` | Periodic floor + BLE + nearby APs + POST + `scan-loop` CLI |
 | `config` | `LARP_SERVER_URL` / `LARP_API_KEY` / scanner-id file |
-| `poster` | `POST /api/batches` (httpx) |
+| `poster` | `POST /api/batches` with `sightings` + `aps` (httpx) |

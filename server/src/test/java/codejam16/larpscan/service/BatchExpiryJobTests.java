@@ -35,7 +35,8 @@ class BatchExpiryJobTests {
   @BeforeEach
   void setUp() {
     LarpProperties properties = new LarpProperties(
-        "test-key", new LarpProperties.Cors("http://localhost"), WINDOW_SECONDS, 2.5, 60000, 5
+        "test-key", new LarpProperties.Cors("http://localhost"), WINDOW_SECONDS, 2.5, 60000, 5,
+        3.0, -65, 8.0, -80, 0.8, -40, 3.0
     );
     job = new BatchExpiryJob(batches, properties, Clock.fixed(NOW, ZoneOffset.UTC));
   }

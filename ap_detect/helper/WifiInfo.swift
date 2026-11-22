@@ -1,9 +1,14 @@
-// WifiInfo: tiny agent app that reads the current Wi-Fi BSSID/SSID via CoreWLAN.
+// WifiInfo: tiny agent app that reads Wi-Fi info via CoreWLAN + Location Services.
 //
 // It must run as a real .app bundle (launched through `open`), because macOS
 // grants Location Services per app. Result is written as JSON to --out <path>
-// (or stdout if omitted):
+// (or stdout if omitted).
+//
+// Connected AP (default):
 //   {"bssid": "aa:bb:cc:dd:ee:ff", "ssid": "MyNet"}   or   {"error": "denied"}
+//
+// Nearby scan (--scan):
+//   {"networks": [{"bssid": "…", "ssid": "…", "rssi": -52}, …]}
 
 import Cocoa
 import CoreLocation
@@ -16,6 +21,7 @@ func arg(_ name: String) -> String? {
 }
 
 let outPath = arg("--out")
+let wantScan = CommandLine.arguments.contains("--scan")
 
 func finish(_ payload: [String: Any]) -> Never {
     let data = (try? JSONSerialization.data(withJSONObject: payload)) ?? Data("{\"error\":\"encode\"}".utf8)
@@ -53,7 +59,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CLLocationManagerDeleg
         case .denied, .restricted:
             finish(["error": "denied"])
         default:  // authorized (always / when in use)
-            readWiFi()
+            if wantScan {
+                scanWiFi()
+            } else {
+                readWiFi()
+            }
         }
     }
 
@@ -68,6 +78,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CLLocationManagerDeleg
             "bssid": bssid?.lowercased() ?? NSNull(),
             "ssid": ssid ?? NSNull(),
         ])
+    }
+
+    func scanWiFi() {
+        guard let iface = CWWiFiClient.shared().interface() else {
+            finish(["error": "unavailable"])
+        }
+        // nil name → scan all visible networks. Requires Location Services.
+        let networks: Set<CWNetwork>
+        do {
+            networks = try iface.scanForNetworks(withName: nil)
+        } catch {
+            finish(["error": error.localizedDescription])
+        }
+        var rows: [[String: Any]] = []
+        for net in networks {
+            // CWNetwork exposes bssid/ssid/rssiValue as properties (not methods).
+            guard let bssid = net.bssid?.lowercased(), !bssid.isEmpty else { continue }
+            rows.append([
+                "bssid": bssid,
+                "ssid": net.ssid as Any? ?? NSNull(),
+                "rssi": net.rssiValue,
+            ])
+        }
+        finish(["networks": rows])
     }
 }
 

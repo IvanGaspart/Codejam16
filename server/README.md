@@ -30,7 +30,7 @@ Defaults: Postgres at `jdbc:postgresql://localhost:5432/larpscan`, `LARP_API_KEY
 | `LARP_API_KEY` | Shared secret for `POST /api/batches` |
 | `LARP_CORS_ORIGIN` | Lovable (or local) frontend origin; optional until the SPA exists |
 
-Optional: `LARP_WINDOW_SECONDS`, `LARP_K`, `LARP_SNAPSHOT_INTERVAL_MS`, `LARP_SMOOTHING_SNAPSHOTS` (see `src/main/resources/application.yml`).
+Optional: `LARP_WINDOW_SECONDS`, `LARP_K`, `LARP_SNAPSHOT_INTERVAL_MS`, `LARP_SMOOTHING_SNAPSHOTS`, and the sighting strata and AP path-loss model: `LARP_CLOSE_D`, `LARP_CLOSE_RSSI`, `LARP_FAR_D`, `LARP_FAR_RSSI`, `LARP_FAR_DOWNSCALE_FACTOR`, `LARP_AP_RSSI_AT_1M`, `LARP_PATH_LOSS_EXPONENT` (see `src/main/resources/application.yml`).
 
 Current production-style host for scanners: `https://codejam16-ui0a.onrender.com`
 
@@ -59,13 +59,15 @@ POST a batch (expect `202`; wrong key → `401`):
 curl -sS -o /dev/null -w "%{http_code}\n" -X POST https://codejam16-ui0a.onrender.com/api/batches \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $LARP_API_KEY" \
-  -d '{"scannerId":"3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab","bssid":"44:48:c1:a4:1a:50","sentAt":"2026-11-22T02:00:00Z","sightings":[-67,-72]}'
+  -d '{"scannerId":"3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab","bssid":"44:48:c1:a4:1a:50","sentAt":"2026-11-22T02:00:00Z","sightings":[-67,-72],"aps":[{"bssid":"44:48:c1:a4:1a:52","rssi":-48}]}'
 ```
+
+`aps` (optional, at most 64) lists nearby Wi-Fi APs; the server trilaterates the Scanner from them and stores `latitude`/`longitude` on the batch (both `NULL` without `aps`).
 
 In Render Postgres (or any SQL client):
 
 ```sql
-SELECT id, scanner_id, bssid, sent_at, received_at, rssis
+SELECT id, scanner_id, bssid, sent_at, received_at, rssis, latitude, longitude
 FROM batch
 ORDER BY id DESC
 LIMIT 5;

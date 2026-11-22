@@ -1,10 +1,13 @@
-"""Get the BSSID / SSID of the currently connected Wi-Fi access point.
+"""Get the BSSID / SSID of the currently connected Wi-Fi access point,
+and scan nearby APs with RSSI (macOS + Linux).
 
-    >>> from iw import get_current_ap
+    >>> from ap_detect import get_current_ap, scan_nearby_aps
     >>> get_current_ap()
     {'bssid': '44:48:c1:a4:1a:50', 'ssid': 'MyNetwork'}   # ssid may be None
+    >>> scan_nearby_aps()
+    [{'bssid': '…', 'ssid': 'wpa.mcgill.ca', 'rssi': -52}, ...]
 
-Returns None if nothing could be read. Set IW_DEBUG=1 to see why.
+get_current_ap() returns None if nothing could be read. Set IW_DEBUG=1 to see why.
 
 macOS note
 ----------
@@ -17,6 +20,9 @@ Services trusts. Backends are tried in this order:
    has its own Location Services entry. One permission prompt on first use,
    then silent. Path: next to this file, or $IW_HELPER.
 3. `system_profiler` (only works on macOS < 14).
+
+Nearby scans use the same Location Services gate on macOS (helper --scan or
+CoreWLAN). On Linux they use ``iw`` scan dump (with an optional nmcli rescan).
 """
 from __future__ import annotations
 
@@ -28,6 +34,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 from typing import TypedDict
 
@@ -39,6 +46,12 @@ _MAC_RE = re.compile(r"(?<![0-9a-f:])([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})(?![0-9
 class AP(TypedDict):
     bssid: str
     ssid: str | None
+
+
+class ScannedAP(TypedDict):
+    bssid: str
+    ssid: str | None
+    rssi: int
 
 
 # --------------------------------------------------------------------------- #
@@ -126,20 +139,28 @@ def _helper_path() -> Path | None:
     return next((p for p in candidates if p.is_dir()), None)
 
 
-def run_helper() -> dict | None:
+def run_helper(*, scan: bool = False) -> dict | None:
     """Launch WifiInfo.app and return its JSON reply, or None if unavailable.
 
     It is launched through `open` (not executed directly) so that macOS treats
     it as its own app instead of attributing it to the terminal. The first run
     shows the one-time Location Services prompt.
+
+    When ``scan`` is True, the helper runs a nearby-network scan (``--scan``).
     """
     app = _helper_path()
     if app is None or not shutil.which("open"):
         return None
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.json"
+        helper_args = ["--out", str(out)]
+        if scan:
+            helper_args.append("--scan")
         # -W waits for exit, -n forces a fresh instance
-        if _run(["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)], timeout=90) is None:
+        if _run(
+            ["open", "-W", "-n", "-a", str(app), "--args", *helper_args],
+            timeout=90,
+        ) is None:
             return None
         try:
             return json.loads(out.read_text())
@@ -228,6 +249,169 @@ def get_current_ap() -> AP | None:
     backends = {"Linux": _linux, "Darwin": _darwin, "Windows": _windows}
     fn = backends.get(platform.system())
     return fn() if fn else None
+
+
+# --------------------------------------------------------------------------- #
+# Nearby AP scan (macOS + Linux)
+# --------------------------------------------------------------------------- #
+def _scanned(bssid: str | None, ssid: str | None, rssi: float | int | None) -> ScannedAP | None:
+    mac = _norm_mac(bssid)
+    if not mac or rssi is None:
+        return None
+    try:
+        rssi_i = int(round(float(rssi)))
+    except (TypeError, ValueError):
+        return None
+    clean_ssid = ssid.strip() if ssid else None
+    if clean_ssid and "redacted" in clean_ssid.lower():
+        clean_ssid = None
+    return {"bssid": mac, "ssid": clean_ssid, "rssi": rssi_i}
+
+
+def _dedupe_strongest(rows: list[ScannedAP]) -> list[ScannedAP]:
+    best: dict[str, ScannedAP] = {}
+    for row in rows:
+        prev = best.get(row["bssid"])
+        if prev is None or row["rssi"] > prev["rssi"]:
+            best[row["bssid"]] = row
+    return sorted(best.values(), key=lambda r: (-r["rssi"], r["bssid"]))
+
+
+def _linux_scan() -> list[ScannedAP]:
+    out = _run(["iw", "dev"])
+    if not out:
+        return []
+    iface_m = re.search(r"Interface\s+(\S+)", out)
+    if not iface_m:
+        return []
+    iface = iface_m.group(1)
+    try:
+        subprocess.run(
+            ["nmcli", "device", "wifi", "rescan", "ifname", iface],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+    time.sleep(2.0)
+    dump = _run(["iw", "dev", iface, "scan", "dump"], timeout=30)
+    if not dump:
+        return []
+
+    rows: list[ScannedAP] = []
+    cur_bssid: str | None = None
+    cur_ssid: str | None = None
+    cur_rssi: float | None = None
+
+    def flush() -> None:
+        nonlocal cur_bssid, cur_ssid, cur_rssi
+        ap = _scanned(cur_bssid, cur_ssid, cur_rssi)
+        if ap:
+            rows.append(ap)
+        cur_bssid, cur_ssid, cur_rssi = None, None, None
+
+    for line in dump.splitlines():
+        if line.startswith("BSS "):
+            flush()
+            m = re.match(r"BSS ([0-9a-f:]{17})", line, re.I)
+            cur_bssid = m.group(1) if m else None
+        elif "signal:" in line and cur_rssi is None:
+            m = re.search(r"signal:\s*([-0-9.]+)", line)
+            if m:
+                cur_rssi = float(m.group(1))
+        elif "SSID:" in line:
+            ssid = line.split("SSID:", 1)[1].strip()
+            if ssid or cur_ssid is None:
+                cur_ssid = ssid
+    flush()
+    return _dedupe_strongest(rows)
+
+
+# Set once an in-process CoreWLAN scan comes back with networks but no BSSIDs
+# (this process lacks Location Services). Retrying costs several seconds per
+# scan for nothing, so later scans go straight to the helper.
+_corewlan_scan_gated = False
+
+
+def _darwin_scan_corewlan() -> list[ScannedAP]:
+    global _corewlan_scan_gated
+    if _corewlan_scan_gated:
+        return []
+    try:
+        import CoreWLAN  # type: ignore
+    except ImportError:
+        log.debug("pyobjc-framework-CoreWLAN not installed")
+        _corewlan_scan_gated = True
+        return []
+    iface = CoreWLAN.CWWiFiClient.sharedWiFiClient().interface()
+    if iface is None:
+        return []
+    # scanForNetworksWithName_error_(None) → all networks; BSSID needs Location.
+    networks, err = iface.scanForNetworksWithName_error_(None, None)
+    if err is not None:
+        log.debug("CoreWLAN scan error: %r", err)
+    if not networks:
+        return []
+    rows: list[ScannedAP] = []
+    for net in networks:
+        ap = _scanned(net.bssid(), net.ssid(), net.rssiValue())
+        if ap:
+            rows.append(ap)
+    if not rows:
+        log.debug("CoreWLAN scan returned no BSSIDs (Location gate); using helper from now on")
+        _corewlan_scan_gated = True
+    return _dedupe_strongest(rows)
+
+
+def _darwin_scan_helper() -> list[ScannedAP]:
+    data = run_helper(scan=True)
+    if data is None:
+        return []
+    if "error" in data:
+        log.debug("WifiInfo.app scan reported: %s", data["error"])
+        return []
+    rows: list[ScannedAP] = []
+    for item in data.get("networks") or []:
+        if not isinstance(item, dict):
+            continue
+        ap = _scanned(item.get("bssid"), item.get("ssid"), item.get("rssi"))
+        if ap:
+            rows.append(ap)
+    return _dedupe_strongest(rows)
+
+
+def _darwin_scan() -> list[ScannedAP]:
+    for backend in (_darwin_scan_corewlan, _darwin_scan_helper):
+        try:
+            rows = backend()
+        except Exception as exc:  # a backend must never crash the caller
+            log.debug("%s raised %r", backend.__name__, exc)
+            continue
+        if rows:
+            return rows
+    log.warning(
+        "Could not scan nearby APs. On macOS 14+ grant Location Services and "
+        "rebuild WifiInfo.app (helper/build.sh), then run "
+        "`python -m ap_detect --authorize`."
+    )
+    return []
+
+
+def scan_nearby_aps() -> list[ScannedAP]:
+    """Return nearby APs as ``{bssid, ssid, rssi}``, strongest-first per BSSID.
+
+    Empty list if the platform is unsupported or the scan failed. Windows is
+    not implemented yet.
+    """
+    system = platform.system()
+    if system == "Linux":
+        return _linux_scan()
+    if system == "Darwin":
+        return _darwin_scan()
+    log.debug("scan_nearby_aps: unsupported platform %s", system)
+    return []
 
 
 if __name__ == "__main__":

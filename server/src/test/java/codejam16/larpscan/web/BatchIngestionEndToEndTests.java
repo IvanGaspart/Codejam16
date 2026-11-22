@@ -70,6 +70,30 @@ class BatchIngestionEndToEndTests {
   }
 
   @Test
+  void batchWithApsIsStoredWithAPosition() throws Exception {
+    // Connected to floor 3; AP 11 (44:48:c1:a4:1a:5x) is the only floor-3 radio heard
+    String payload = """
+        {
+          "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
+          "bssid": "44:48:c1:a4:1a:50",
+          "sentAt": "2026-11-21T14:03:15Z",
+          "sightings": [-67],
+          "aps": [{"bssid": "44:48:c1:a4:1a:52", "rssi": -48}]
+        }
+        """;
+
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isAccepted());
+
+    Batch stored = batches.findAll().get(0);
+    assertEquals(45.5073446462334, stored.getLatitude(), 1e-9);
+    assertEquals(-73.57912498757777, stored.getLongitude(), 1e-9);
+  }
+
+  @Test
   void rejectedBatchIsNotStored() throws Exception {
     String payload = """
         {

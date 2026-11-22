@@ -63,13 +63,22 @@ For each Floor `f`, at time `t`:
 latest(s)          = Scanner s's most recent batch received in (t − WINDOW, t]
 covered(f)         = some Scanner's latest(s) has an AP on f
 scanners(f)        = count of Scanners whose latest(s) is on f
-devices(f)         = max of |rssis| over latest(s) for every Scanner s whose latest(s) is on f
+close(s)           = count of latest(s).rssis ≥ CLOSE_RSSI                     (disc of radius CLOSE_D)
+far(s)             = count of latest(s).rssis in [FAR_RSSI, CLOSE_RSSI)        (band CLOSE_D < r ≤ FAR_D)
+w(s)               = close(s) + FAR_DOWNSCALE_FACTOR × far(s)
+ρ_s(x)             = close(s) / (π CLOSE_D²)                        if |x − pos(s)| ≤ CLOSE_D
+                     FAR_DOWNSCALE_FACTOR × far(s) / (π (FAR_D² − CLOSE_D²))  if CLOSE_D < |x − pos(s)| ≤ FAR_D
+k(x)               = count of positioned Scanners on f whose FAR_D disc contains x
+union(f)           = ∫ over the union of the discs of Σ_s ρ_s(x) / k(x) dx
+devices(f)         = max(union(f), max of w(s) over positionless Scanners on f)
 estimatedPeople(f) = devices(f) / K
 busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 ```
 
 - **Latest batch only:** each Scanner counts once, by its latest batch, so a device heard in every batch of the window is not counted again per batch, and a Scanner that changed Floors counts only on its current one.
-- **Overlap:** when several Scanners are on one Floor, only the largest latest-batch count is used. That avoids double-counting devices heard by more than one Scanner, but undercounts when their ranges are disjoint. `scanners(f)` is exposed on `/floors` so the website can show how many Scanners contribute.
+- **Position:** at ingest the server trilaterates each batch from the 3 strongest `aps` whose location (`ap_bssid_trottier.csv` ⋈ `ap_gps_trottier.csv`) is on the Floor of the connected `bssid`. APs are matched on the first 5 octets of the BSSID (the last octet can be anything, 00–ff). Distance from RSSI uses the log-distance model `d = 10^((AP_RSSI_AT_1M − rssi) / (10 n))`. With 1–2 usable APs, or a degenerate/out-of-hull solution, it uses the 1/d-weighted centroid; with none the batch is positionless.
+- **Overlap:** each point of the Floor covered by several Scanners' circles is counted once, at the mean of the covering strata's densities (devices assumed uniform within each stratum). `Σ w(s) − union(f)` is exactly what plain summing would over-count in the overlaps; with disjoint circles `union(f) = Σ w(s)`. It is computed numerically on a 0.25 m grid per disc. Walls are ignored: each Floor is a free plane.
+- **Positionless Scanners** (old scanner build, or no AP locations for that Floor yet): their overlap is unknown, so they are assumed fully overlapped, as in the previous max-based algorithm. `scanners(f)` is exposed on `/floors` so the website can show how many Scanners contribute.
 - **Not covered:** the result is `level = NO_DATA`, whatever the counts are.
 - **Partial coverage:** a Scanner hears only about 10–20 m. Counts are reported as-is and not scaled up to the whole Floor.
 - **Smoothing:** `/floors` reports `estimatedPeople` as the mean people estimate of the covered snapshots among the last `SMOOTHING_SNAPSHOTS`, and computes `busynessPct` from that mean with the formula above, so the two always agree. Uncovered snapshots are left out; with no covered snapshot, the live values are used. Snapshots stored before people were recorded count as `busynessPct × capacity / 100` people.
@@ -87,11 +96,15 @@ busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 | Name | Default | Note |
 |---|---|---|
 | `BATCH_INTERVAL` | 15 s | Scanner POST period |
-| `RSSI_FLOOR` | −75 dBm | Scanner drops weaker devices |
+| `RSSI_FLOOR` | −80 dBm | Scanner drops weaker devices |
 | `WINDOW` | 120 s | How long a Scanner's latest batch stays valid. Several `BATCH_INTERVAL`s, so one dropped POST does not flip a Floor to "No data". |
 | `K` | 2.5 | Devices per person. Calibrate once by counting heads on one Floor. |
 | `SNAPSHOT_INTERVAL` | 60 s | |
 | `SMOOTHING_SNAPSHOTS` | 5 | |
+| `CLOSE_D` / `CLOSE_RSSI` | 3 m / −65 dBm | Close disc. Placeholder until calibrated. |
+| `FAR_D` / `FAR_RSSI` | 8 m / −80 dBm | Far disc. `FAR_RSSI` must be ≥ the Scanner's `RSSI_FLOOR`. Placeholder. |
+| `FAR_DOWNSCALE_FACTOR` | 0.8 | Weight of far-band devices. Placeholder. |
+| `AP_RSSI_AT_1M` / `n` | −40 dBm / 3.0 | Wi-Fi path-loss model for trilateration. Placeholder. |
 
 ## REST API
 
@@ -106,7 +119,8 @@ Request body is `BatchRequest` (there is no separate Sighting DTO):
   "scannerId": "3f2b…-uuid",
   "bssid": "44:48:c1:a4:1a:50",
   "sentAt": "2026-11-21T14:03:15Z",
-  "sightings": [-67, -72, -80]
+  "sightings": [-67, -72, -80],
+  "aps": [{ "bssid": "44:48:c1:a4:1a:52", "rssi": -48 }]
 }
 ```
 
@@ -117,7 +131,8 @@ Request body is `BatchRequest` (there is no separate Sighting DTO):
 | `scannerId` | UUID | Random UUID generated once per install |
 | `bssid` | string | Lowercase colon-separated MAC of the Scanner's current AP |
 | `sentAt` | Instant | Interval boundary when the batch was sent |
-| `sightings` | `int[]` | One RSSI in dBm per device (−127…0); required, may be empty |
+| `sightings` | `int[]` | One RSSI in dBm per device (−127…0); required, may be empty. The server splits them into strata. |
+| `aps` | `{bssid, rssi}[]` | Nearby Wi-Fi APs the Scanner hears, for trilateration; optional (≤ 64), missing = positionless |
 
 BLE addresses, CoreBluetooth UUIDs, device names, and per-device timestamps are not part of the payload ([ADR-0002](adr/0002-rssi-only-batches.md)).
 
@@ -160,7 +175,7 @@ At startup the server truncates the AP and Floor tables and reloads them from th
 |---|---|
 | `floor` | `building_id, floor, capacity` |
 | `access_point` | `bssid (pk), building_id, floor` |
-| `batch` | `id, scanner_id, bssid, sent_at, received_at, rssis int[]` (one RSSI per device heard; kept for `WINDOW`; used for coverage and counts) |
+| `batch` | `id, scanner_id, bssid, sent_at, received_at, rssis int[]` (one RSSI per device heard; kept for `WINDOW`; used for coverage and counts), `latitude, longitude` (nullable; trilaterated at ingest) |
 | `busyness_snapshot` | `building_id, floor, at, busyness_pct, covered` (kept) |
 
 ## Website
@@ -168,7 +183,7 @@ At startup the server truncates the AP and Floor tables and reloads them from th
 - **Building card:** Trottier only. A simple clickable card; the interactive map is RQ-14.
 - **Floor stack:** Floors stacked vertically, each coloured by level, showing the percentage or "No data". Polls `/floors` every 15 s.
 - **Floor view:** level, percentage, estimated people, and today's history chart.
-- **Out of scope:** seat-level and in-floor maps, because location is per Floor only.
+- **Out of scope:** seat-level and in-floor maps (Scanner positions are server-internal for now).
 
 ## Scanner
 

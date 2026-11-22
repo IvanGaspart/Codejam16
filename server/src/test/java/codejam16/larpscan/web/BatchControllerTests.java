@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,6 +73,69 @@ class BatchControllerTests {
             .contentType(APPLICATION_JSON)
             .content(payload))
         .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void acceptsValidBatchWithAps() throws Exception {
+    String payload = """
+        {
+          "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
+          "bssid": "44:48:c1:a4:1a:50",
+          "sentAt": "2026-11-21T14:03:15Z",
+          "sightings": [-67],
+          "aps": [{"bssid": "44:48:c1:a4:1a:52", "rssi": -48}]
+        }
+        """;
+
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isAccepted());
+  }
+
+  @Test
+  void rejectsMalformedApEntries() throws Exception {
+    String payload = """
+        {
+          "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
+          "bssid": "44:48:c1:a4:1a:50",
+          "sentAt": "2026-11-21T14:03:15Z",
+          "sightings": [],
+          "aps": [{"bssid": "44:48:C1:A4:1A:52", "rssi": 5}, {"bssid": "44:48:c1:a4:1a:53"}, null]
+        }
+        """;
+
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors['aps[0].bssid']").exists())
+        .andExpect(jsonPath("$.errors['aps[0].rssi']").exists())
+        .andExpect(jsonPath("$.errors['aps[1].rssi']").exists())
+        .andExpect(jsonPath("$.errors['aps[2]']").exists());
+  }
+
+  @Test
+  void rejectsMoreThan64Aps() throws Exception {
+    String ap = "{\"bssid\": \"44:48:c1:a4:1a:52\", \"rssi\": -48}";
+    String payload = """
+        {
+          "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
+          "bssid": "44:48:c1:a4:1a:50",
+          "sentAt": "2026-11-21T14:03:15Z",
+          "sightings": [],
+          "aps": [%s]
+        }
+        """.formatted(String.join(",", Collections.nCopies(65, ap)));
+
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.aps").exists());
   }
 
   @Test

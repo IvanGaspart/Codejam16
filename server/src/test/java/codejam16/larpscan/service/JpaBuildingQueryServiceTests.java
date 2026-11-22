@@ -79,8 +79,8 @@ class JpaBuildingQueryServiceTests {
 
     assertEquals(
         List.of(
-            new FloorBusynessResponse(1, 120, true, 34, 28, BusynessLevel.QUIET),
-            new FloorBusynessResponse(2, 90, false, 0, 0, BusynessLevel.NO_DATA)
+            new FloorBusynessResponse(1, 120, true, 1, 34, 28, BusynessLevel.QUIET),
+            new FloorBusynessResponse(2, 90, false, 0, 0, 0, BusynessLevel.NO_DATA)
         ),
         service.listFloors(BUILDING)
     );
@@ -132,7 +132,7 @@ class JpaBuildingQueryServiceTests {
     snapshot(2, 2, 80, true);
 
     assertEquals(
-        new FloorBusynessResponse(2, 90, false, 0, 0, BusynessLevel.NO_DATA),
+        new FloorBusynessResponse(2, 90, false, 0, 0, 0, BusynessLevel.NO_DATA),
         floor(2)
     );
   }

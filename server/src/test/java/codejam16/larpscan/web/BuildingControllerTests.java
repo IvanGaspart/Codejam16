@@ -78,11 +78,13 @@ class BuildingControllerTests {
         .andExpect(jsonPath("$[0].floor").value(1))
         .andExpect(jsonPath("$[0].capacity").value(120))
         .andExpect(jsonPath("$[0].covered").value(true))
+        .andExpect(jsonPath("$[0].scanners").value(1))
         .andExpect(jsonPath("$[0].estimatedPeople").value(34))
         .andExpect(jsonPath("$[0].busynessPct").value(28))
         .andExpect(jsonPath("$[0].level").value("QUIET"))
         .andExpect(jsonPath("$[1].floor").value(4))
         .andExpect(jsonPath("$[1].covered").value(false))
+        .andExpect(jsonPath("$[1].scanners").value(0))
         .andExpect(jsonPath("$[1].estimatedPeople").value(0))
         .andExpect(jsonPath("$[1].busynessPct").value(0))
         .andExpect(jsonPath("$[1].level").value("NO_DATA"));

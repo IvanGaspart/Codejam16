@@ -75,6 +75,7 @@ class BusynessCalculatorTests {
 
     FloorBusyness f1 = floor(1);
     assertTrue(f1.covered());
+    assertEquals(1, f1.scanners());
     assertEquals(25, f1.devices());
     assertEquals(10, f1.estimatedPeople());
     assertEquals(10, f1.busynessPct());
@@ -95,8 +96,10 @@ class BusynessCalculatorTests {
     batch(SCANNER_A, AP_FLOOR_1, 10, 10);
     batch(SCANNER_B, AP_FLOOR_1, 20, 15);
 
-    assertEquals(15, floor(1).devices());
-    assertEquals(6, floor(1).estimatedPeople());
+    FloorBusyness f1 = floor(1);
+    assertEquals(2, f1.scanners());
+    assertEquals(15, f1.devices());
+    assertEquals(6, f1.estimatedPeople());
   }
 
   @Test
@@ -139,6 +142,7 @@ class BusynessCalculatorTests {
 
     assertNoData(floor(1));
     assertTrue(floor(2).covered());
+    assertEquals(1, floor(2).scanners());
     assertEquals(5, floor(2).devices());
   }
 
@@ -158,6 +162,7 @@ class BusynessCalculatorTests {
     batch(SCANNER_B, AP_FLOOR_2, 10, 5);
 
     assertNoData(floor(1));
+    assertEquals(1, floor(2).scanners());
     assertEquals(5, floor(2).devices());
   }
 
@@ -216,6 +221,7 @@ class BusynessCalculatorTests {
 
   private static void assertNoData(FloorBusyness f) {
     assertFalse(f.covered());
+    assertEquals(0, f.scanners());
     assertEquals(0, f.devices());
     assertEquals(0, f.estimatedPeople());
     assertEquals(0, f.busynessPct());

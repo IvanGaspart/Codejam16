@@ -3,6 +3,6 @@ __pycache__/
 *.pyc
 **/.venv
 **/.env
-service/ap_bssid_*.csv
+#service/ap_bssid_*.csv
 ap_detect/helper/.build/
 ap_detect/src/ap_detect/_bin/

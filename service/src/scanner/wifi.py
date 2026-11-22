@@ -18,10 +18,7 @@ Services trusts. Backends are tried in this order:
 2. WifiInfo.app -- a small bundled helper (build it with helper/build.sh) that
    has its own Location Services entry. One permission prompt on first use,
    then silent. Path: next to this file, or $IW_HELPER.
-3. `shortcuts run <name>` -- a Shortcut that uses the "Get Network Details"
-   action and outputs the BSSID. Name defaults to "GetBSSID"; override with
-   the IW_SHORTCUT environment variable.
-4. `system_profiler` (only works on macOS < 14).
+3. `system_profiler` (only works on macOS < 14).
 """
 from __future__ import annotations
 
@@ -39,7 +36,6 @@ from typing import TypedDict
 log = logging.getLogger(__name__)
 
 _MAC_RE = re.compile(r"(?<![0-9a-f:])([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})(?![0-9a-f:])", re.I)
-_DEFAULT_SHORTCUT = "GetBSSID"
 
 
 class AP(TypedDict):
@@ -180,14 +176,6 @@ def _darwin_helper() -> AP | None:
     return _ap(data.get("bssid"), data.get("ssid"))
 
 
-def _darwin_shortcut() -> AP | None:
-    if not shutil.which("shortcuts"):
-        return None
-    name = os.environ.get("IW_SHORTCUT", _DEFAULT_SHORTCUT)
-    out = _run(["shortcuts", "run", name], timeout=20)
-    return _ap(out)  # the shortcut only outputs the BSSID
-
-
 def _darwin_system_profiler() -> AP | None:
     try:
         major = int(platform.mac_ver()[0].split(".")[0])
@@ -204,7 +192,7 @@ def _darwin_system_profiler() -> AP | None:
 
 
 def _darwin() -> AP | None:
-    for backend in (_darwin_corewlan, _darwin_helper, _darwin_shortcut, _darwin_system_profiler):
+    for backend in (_darwin_corewlan, _darwin_helper, _darwin_system_profiler):
         try:
             ap = backend()
         except Exception as exc:  # a backend must never crash the caller
@@ -215,10 +203,8 @@ def _darwin() -> AP | None:
     log.warning(
         "Could not read the BSSID. On macOS 14+ grant Location Services to your "
         "terminal app (System Settings > Privacy & Security > Location Services) "
-        "and `pip install pyobjc-framework-CoreWLAN`, or create a Shortcut named "
-        "%r (set IW_SHORTCUT to use another name) that outputs 'Get Network "
-        "Details' > BSSID.",
-        os.environ.get("IW_SHORTCUT", _DEFAULT_SHORTCUT),
+        "and `pip install pyobjc-framework-CoreWLAN`, or build WifiInfo.app with "
+        "helper/build.sh and run authorize()."
     )
     return None
 

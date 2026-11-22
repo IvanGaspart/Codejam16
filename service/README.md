@@ -70,7 +70,7 @@ launchctl kickstart -k gui/$(id -u)/com.codejam16.larp-scan
 launchctl bootout gui/$(id -u)/com.codejam16.larp-scan
 ```
 
-macOS BLE addresses are peripheral UUIDs (not MACs); the server MVP expects Linux MACs, so posting from macOS may be limited.
+On macOS, BLE devices show up as peripheral UUIDs instead of MACs. This doesn't affect posting: batches carry only the RSSI array (ADR-0002), so macOS scanners post the same way Linux ones do.
 
 Re-run `bash install.sh` after pulling scanner changes or rebuilding the helper. It is safe to re-run: it reinstalls with `uv tool install --force --reinstall .` (`--reinstall` stops uv from reusing a cached wheel that has a stale or missing helper), waits for the old LaunchAgent to unload before it bootstraps the new one, and re-enables the agent if it was turned off with `launchctl disable`.
 

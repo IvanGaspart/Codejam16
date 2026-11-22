@@ -28,6 +28,13 @@ LARP-scan saves you from unfortunate library larping by allowing you to gauge st
 | [Server](server/README.md) | Stores batches in PostgreSQL, estimates occupancy, and serves the public read API. |
 | [Front-end](larpscan/README.md) | Displays the building map, floor occupancy, recent trends, and X-Ray scanner overlay. |
 
+```mermaid
+flowchart LR
+    Scanner["Scanner service"] -->|"Bluetooth and Wi-Fi readings"| Server["Occupancy server"]
+    Server <-->|"Batches and floor snapshots"| Database[("PostgreSQL")]
+    Frontend["Front-end"] -->|"Requests occupancy, history, and X-Ray data"| Server
+```
+
 ## Local setup
 
 From a clone of this repository, start the server and its database first. In separate terminals, run the service on a Wi-Fi and Bluetooth-equipped laptop and start the front-end. Each subsystem README above includes its prerequisites and commands. To explore the interface without scanner hardware, use the front-end’s demo mode.

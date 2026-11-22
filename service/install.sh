@@ -64,18 +64,17 @@ install_darwin() {
   fi
 
   # The daemon launches the WifiInfo.app copy inside the uv tool env, so authorize that one.
+  # It is the only copy the daemon runs: a second build under the same bundle ID makes
+  # locationd drop the grant on every launch and re-prompt every scan.
   local tool_python
   tool_python="$(uv tool dir)/scanner/bin/python"
   echo "install.sh: authorizing installed WifiInfo.app (allow the Location Services prompt if shown) …"
   local auth
-  auth="$("$tool_python" -c 'from scanner import authorize; print(authorize())')"
+  auth="$("$tool_python" -c 'from ap_detect import authorize; print(authorize())')"
   echo "install.sh: authorize() -> $auth"
   case "$auth" in
     helper-missing)
-      echo "install.sh: WifiInfo.app missing from the installed package (is src/scanner/_bin/WifiInfo.app present and pyproject.toml up to date?)" >&2
-      exit 1 ;;
-    helper-failed)
-      echo "install.sh: WifiInfo.app is installed but failed to launch or timed out (answer the Location prompt within 90 s); re-run install.sh" >&2
+      echo "install.sh: WifiInfo.app is missing from the installed ap_detect package, failed to launch, or timed out (answer the Location prompt within 90 s); check ../ap_detect/src/ap_detect/_bin/WifiInfo.app and re-run install.sh" >&2
       exit 1 ;;
   esac
 
@@ -140,10 +139,11 @@ if [[ ${#foreign[@]} -gt 0 ]]; then
   exit 1
 fi
 
-if [[ "$OS" == "Darwin" && ! -d "$SERVICE_DIR/src/scanner/_bin/WifiInfo.app" ]]; then
-  # _bin/ is gitignored, so fresh clones don't have the helper; it must exist before the wheel is built
-  echo "install.sh: WifiInfo.app not built yet; running helper/build.sh (needs Xcode CLT) …"
-  bash "$SERVICE_DIR/helper/build.sh"
+AP_DETECT_DIR="$SERVICE_DIR/../ap_detect"
+if [[ "$OS" == "Darwin" && ! -d "$AP_DETECT_DIR/src/ap_detect/_bin/WifiInfo.app" ]]; then
+  # _bin/ is gitignored, so fresh clones don't have the helper; it must exist before the ap-detect wheel is built
+  echo "install.sh: WifiInfo.app not built yet; running ap_detect/helper/build.sh (needs Xcode CLT) …"
+  bash "$AP_DETECT_DIR/helper/build.sh"
 fi
 
 install_cli_and_env

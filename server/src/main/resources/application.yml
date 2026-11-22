@@ -37,9 +37,10 @@ larp:
   # Sighting strata: devices at rssi >= close-rssi (dBm) are within close-d metres of the Scanner;
   # devices in [far-rssi, close-rssi) are within far-d metres and weigh far-downscale-factor; weaker
   # ones are ignored. Keep far-rssi >= the Scanner's RSSI_FLOOR (-80).
-  close-d: ${LARP_CLOSE_D:3.0}
+  # close-d follows from the BLE log-distance model with RSSI@1m ≈ -48 dBm fitted to far-d (n ≈ 2.14).
+  close-d: ${LARP_CLOSE_D:6.1}
   close-rssi: ${LARP_CLOSE_RSSI:-65}
-  far-d: ${LARP_FAR_D:8.0}
+  far-d: ${LARP_FAR_D:30.5}
   far-rssi: ${LARP_FAR_RSSI:-80}
   far-downscale-factor: ${LARP_FAR_DOWNSCALE_FACTOR:0.8}
   # Wi-Fi path-loss model used to trilaterate Scanners from the APs they hear:

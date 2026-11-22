@@ -101,8 +101,8 @@ busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 | `K` | 2.5 | Devices per person. Calibrate once by counting heads on one Floor. |
 | `SNAPSHOT_INTERVAL` | 60 s | |
 | `SMOOTHING_SNAPSHOTS` | 5 | |
-| `CLOSE_D` / `CLOSE_RSSI` | 3 m / −65 dBm | Close disc. Placeholder until calibrated. |
-| `FAR_D` / `FAR_RSSI` | 8 m / −80 dBm | Far disc. `FAR_RSSI` must be ≥ the Scanner's `RSSI_FLOOR`. Placeholder. |
+| `CLOSE_D` / `CLOSE_RSSI` | 6.1 m / −65 dBm | Close disc. Placeholder until calibrated. |
+| `FAR_D` / `FAR_RSSI` | 30.5 m / −80 dBm | Far disc. `FAR_RSSI` must be ≥ the Scanner's `RSSI_FLOOR`. Placeholder. |
 | `FAR_DOWNSCALE_FACTOR` | 0.8 | Weight of far-band devices. Placeholder. |
 | `AP_RSSI_AT_1M` / `n` | −40 dBm / 3.0 | Wi-Fi path-loss model for trilateration. Placeholder. |
 

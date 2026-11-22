@@ -153,14 +153,17 @@ def authorize() -> str:
     """Trigger the macOS Location Services prompt for the helper (macOS only).
 
     Returns "granted", "denied", "timeout", "unclear" (permission may be fine
-    but no Wi-Fi data came back, e.g. not connected), "helper-missing", or
+    but no Wi-Fi data came back, e.g. not connected), "helper-missing",
+    "helper-failed" (app present but `open` failed or timed out), or
     "not-needed" on other platforms.
     """
     if platform.system() != "Darwin":
         return "not-needed"
+    if _helper_path() is None:
+        return "helper-missing"
     data = run_helper()
     if data is None:
-        return "helper-missing"
+        return "helper-failed"
     if data.get("bssid"):
         return "granted"
     return {"denied": "denied", "timeout": "timeout"}.get(data.get("error"), "unclear")

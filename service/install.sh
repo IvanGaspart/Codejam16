@@ -70,10 +70,14 @@ install_darwin() {
   local auth
   auth="$("$tool_python" -c 'from scanner import authorize; print(authorize())')"
   echo "install.sh: authorize() -> $auth"
-  if [[ "$auth" == "helper-missing" ]]; then
-    echo "install.sh: WifiInfo.app missing from the installed package; run 'bash helper/build.sh' and re-run install.sh" >&2
-    exit 1
-  fi
+  case "$auth" in
+    helper-missing)
+      echo "install.sh: WifiInfo.app missing from the installed package (is src/scanner/_bin/WifiInfo.app present and pyproject.toml up to date?)" >&2
+      exit 1 ;;
+    helper-failed)
+      echo "install.sh: WifiInfo.app is installed but failed to launch or timed out (answer the Location prompt within 90 s); re-run install.sh" >&2
+      exit 1 ;;
+  esac
 
   cp "$wrapper_src" "$wrapper_dst"
   chmod +x "$wrapper_dst"
@@ -90,8 +94,9 @@ install_darwin() {
     launchctl print "$domain/$label" >/dev/null 2>&1 || break
     sleep 0.2
   done
+  # enable before bootstrap: a label left disabled (launchctl disable) also fails with "5: Input/output error"
+  launchctl enable "$domain/$label"
   launchctl bootstrap "$domain" "$plist_dst"
-  launchctl enable "$domain/$label" 2>/dev/null || true
   launchctl kickstart -k "$domain/$label" 2>/dev/null || true
 
   echo "install.sh: $label bootstrapped"
@@ -109,6 +114,12 @@ fi
 if ! command -v uv >/dev/null 2>&1; then
   echo "install.sh: uv is required on PATH" >&2
   exit 1
+fi
+
+if [[ "$OS" == "Darwin" && ! -d "$SERVICE_DIR/src/scanner/_bin/WifiInfo.app" ]]; then
+  # _bin/ is gitignored, so fresh clones don't have the helper; it must exist before the wheel is built
+  echo "install.sh: WifiInfo.app not built yet; running helper/build.sh (needs Xcode CLT) …"
+  bash "$SERVICE_DIR/helper/build.sh"
 fi
 
 install_cli_and_env

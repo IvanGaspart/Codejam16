@@ -10,6 +10,7 @@ import codejam16.larpscan.domain.BusynessLevel;
 import codejam16.larpscan.domain.Floor;
 import codejam16.larpscan.repository.AccessPointRepository;
 import codejam16.larpscan.repository.BatchRepository;
+import codejam16.larpscan.repository.BusynessSnapshotRepository;
 import codejam16.larpscan.repository.FloorRepository;
 import codejam16.larpscan.web.dto.BuildingResponse;
 import codejam16.larpscan.web.dto.FloorBusynessResponse;
@@ -35,6 +36,7 @@ class JpaBuildingQueryServiceTests {
   @Autowired private BatchRepository batches;
   @Autowired private FloorRepository floors;
   @Autowired private AccessPointRepository accessPoints;
+  @Autowired private BusynessSnapshotRepository snapshots;
 
   private JpaBuildingQueryService service;
 
@@ -45,9 +47,12 @@ class JpaBuildingQueryServiceTests {
     accessPoints.save(new AccessPoint(AP_FLOOR_1, "trottier", 1));
     LarpProperties props =
         new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5);
+    Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     service = new JpaBuildingQueryService(
         new BusynessCalculator(batches, floors, accessPoints, props),
-        Clock.fixed(NOW, ZoneOffset.UTC)
+        new FloorHistoryService(snapshots, floors, clock),
+        floors,
+        clock
     );
   }
 

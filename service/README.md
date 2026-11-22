@@ -47,12 +47,25 @@ Linux and Windows need no build step.
 # predict current floor from the connected AP
 uv run predict-floor
 
-# continuous floor + BLE updates (RSSI floor −85 dBm, 15 s interval)
+# continuous floor + BLE updates; POST RSSI batches (needs env below)
+export LARP_SERVER_URL=http://localhost:8080
+export LARP_API_KEY=dev-local-key
 uv run scan-loop
+
+# local only (no HTTP)
+uv run scan-loop --no-post
 
 # survey walk (Linux): append visible APs at a floor into ../data/survey/
 uv run collect-aps --floor 3
 ```
+
+Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
+
+```json
+{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72] }
+```
+
+`sightings` is RSSI ints only (may be `[]`). Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
 
 Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packaged lookup lives in `src/scanner/data/`.
 
@@ -76,6 +89,8 @@ service/
     collect.py
     ble.py
     scan_loop.py
+    config.py
+    poster.py
     data/
 ```
 
@@ -85,4 +100,6 @@ service/
 | `predict` | Floor lookup + `predict-floor` CLI |
 | `collect` | Linux survey walk CLI |
 | `ble` | Bleak scan buffer (RSSI floor, no names) |
-| `scan_loop` | Periodic floor + BLE updates + `scan-loop` CLI |
+| `scan_loop` | Periodic floor + BLE + POST + `scan-loop` CLI |
+| `config` | `LARP_SERVER_URL` / `LARP_API_KEY` / scanner-id file |
+| `poster` | `POST /api/batches` (httpx) |

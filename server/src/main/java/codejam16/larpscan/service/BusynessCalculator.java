@@ -75,7 +75,7 @@ public class BusynessCalculator {
         continue;
       }
       coveredFloors.add(floor);
-      devicesByFloor.merge(floor, latest.getRssis().length, Integer::sum);
+      devicesByFloor.merge(floor, latest.getRssis().length, Math::max);
     }
 
     return floors.findByBuildingIdOrderByFloorAsc(buildingId).stream()

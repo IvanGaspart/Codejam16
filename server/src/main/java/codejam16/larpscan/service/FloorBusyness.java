@@ -10,7 +10,7 @@ import codejam16.larpscan.domain.BusynessLevel;
  * @param floor floor number within the Building
  * @param capacity seat capacity of the Floor
  * @param covered whether some Scanner's latest batch in {@code WINDOW} is on this Floor
- * @param devices sum of RSSI counts over the latest batches on this Floor
+ * @param devices max of RSSI counts over the latest batches on this Floor
  * @param estimatedPeople {@code devices / K}, rounded half up
  * @param busynessPct {@code min(100, 100 × devices / K / capacity)}, rounded half up
  */

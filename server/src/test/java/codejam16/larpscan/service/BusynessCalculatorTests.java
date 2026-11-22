@@ -91,12 +91,12 @@ class BusynessCalculatorTests {
   }
 
   @Test
-  void sumsScannersOnTheSameFloor() {
+  void takesMaxOfScannersOnTheSameFloor() {
     batch(SCANNER_A, AP_FLOOR_1, 10, 10);
     batch(SCANNER_B, AP_FLOOR_1, 20, 15);
 
-    assertEquals(25, floor(1).devices());
-    assertEquals(10, floor(1).estimatedPeople());
+    assertEquals(15, floor(1).devices());
+    assertEquals(6, floor(1).estimatedPeople());
   }
 
   @Test

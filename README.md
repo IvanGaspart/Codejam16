@@ -6,7 +6,9 @@ LARP-scan — see [`docs/SPEC.md`](docs/SPEC.md) and [ADR-0002](docs/adr/0002-rs
 
 ## Server
 
-Spring Boot app in [`server/`](server/). Scanners ingest batches with:
+Spring Boot app in [`server/`](server/). Deploy to Render with Docker — see [`server/README.md`](server/README.md) (Root Directory `server`, scanner `LARP_SERVER_URL=https://codejam16-ui0a.onrender.com`).
+
+Scanners ingest batches with:
 
 ```http
 POST /api/batches

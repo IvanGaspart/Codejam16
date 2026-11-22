@@ -109,8 +109,45 @@ class JpaBuildingQueryServiceTests {
     FloorBusynessResponse f1 = floor(1);
     assertEquals(30, f1.busynessPct());
     assertEquals(BusynessLevel.MODERATE, f1.level());
-    assertEquals(34, f1.estimatedPeople());
+    assertEquals(36, f1.estimatedPeople()); // smoothed like the pct, not the live 34
     assertEquals(true, f1.covered());
+  }
+
+  @Test
+  void smoothsStoredPeopleAndDerivesPctFromThem() {
+    coverFloor1();
+    snapshotPeople(1, 1, 0.0, true);
+    snapshotPeople(1, 2, 0.0, true);
+    snapshotPeople(1, 3, 0.0, true);
+    snapshotPeople(1, 4, 28.8, true);
+    snapshotPeople(1, 5, 31.2, true);
+
+    FloorBusynessResponse f1 = floor(1);
+    assertEquals(12, f1.estimatedPeople()); // mean 12.0 people
+    assertEquals(10, f1.busynessPct()); // 100 × 12 / 120
+    assertEquals(1, f1.scanners());
+  }
+
+  @Test
+  void keepsPeopleAboveCapacityWhilePctCapsAt100() {
+    coverFloor1();
+    snapshotPeople(1, 1, 150.0, true);
+    snapshotPeople(1, 2, 162.0, true);
+
+    FloorBusynessResponse f1 = floor(1);
+    assertEquals(156, f1.estimatedPeople());
+    assertEquals(100, f1.busynessPct());
+  }
+
+  @Test
+  void derivesPeopleFromPctForSnapshotsStoredWithoutPeople() {
+    coverFloor1();
+    snapshot(1, 1, 50, true); // legacy row: 60 people at capacity 120
+    snapshotPeople(1, 2, 24.0, true);
+
+    FloorBusynessResponse f1 = floor(1);
+    assertEquals(42, f1.estimatedPeople());
+    assertEquals(35, f1.busynessPct());
   }
 
   @Test
@@ -173,6 +210,13 @@ class JpaBuildingQueryServiceTests {
     snapshots.save(
         new BusynessSnapshot(BUILDING, floor, NOW.minusSeconds(60L * minutesAgo), pct, covered)
     );
+  }
+
+  private void snapshotPeople(int floor, int minutesAgo, double people, boolean covered) {
+    int pct = (int) Math.min(100, Math.round(100 * people / 120));
+    snapshots.save(new BusynessSnapshot(
+        BUILDING, floor, NOW.minusSeconds(60L * minutesAgo), pct, people, covered
+    ));
   }
 
   private FloorBusynessResponse floor(int floor) {

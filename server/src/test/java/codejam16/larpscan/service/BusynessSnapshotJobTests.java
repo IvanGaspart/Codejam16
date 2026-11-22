@@ -75,6 +75,7 @@ class BusynessSnapshotJobTests {
     assertEquals(1, f1.getFloor());
     assertEquals(NOW, f1.getAt());
     assertEquals(28, f1.getBusynessPct());
+    assertEquals(34.0, f1.getEstimatedPeople()); // 85 / K, unrounded
     assertTrue(f1.isCovered());
 
     BusynessSnapshot f2 = stored.get(1);
@@ -82,6 +83,7 @@ class BusynessSnapshotJobTests {
     assertEquals(2, f2.getFloor());
     assertEquals(NOW, f2.getAt());
     assertEquals(0, f2.getBusynessPct());
+    assertEquals(0.0, f2.getEstimatedPeople());
     assertFalse(f2.isCovered());
   }
 

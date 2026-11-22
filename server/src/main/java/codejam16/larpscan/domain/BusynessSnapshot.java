@@ -37,6 +37,13 @@ public class BusynessSnapshot {
   @Column(name = "busyness_pct", nullable = false)
   private int busynessPct;
 
+  /**
+   * Unsmoothed, unrounded people estimate ({@code devices / K}). Nullable: snapshots stored before
+   * this column existed have none, and smoothing derives it from {@code busynessPct} instead.
+   */
+  @Column(name = "estimated_people")
+  private Double estimatedPeople;
+
   @Column(nullable = false)
   private boolean covered;
 
@@ -48,13 +55,26 @@ public class BusynessSnapshot {
       int floor,
       Instant at,
       int busynessPct,
+      Double estimatedPeople,
       boolean covered
   ) {
     this.buildingId = buildingId;
     this.floor = floor;
     this.at = at;
     this.busynessPct = busynessPct;
+    this.estimatedPeople = estimatedPeople;
     this.covered = covered;
+  }
+
+  /** A snapshot without a people estimate, like those stored before {@code estimated_people}. */
+  public BusynessSnapshot(
+      String buildingId,
+      int floor,
+      Instant at,
+      int busynessPct,
+      boolean covered
+  ) {
+    this(buildingId, floor, at, busynessPct, null, covered);
   }
 
   public Long getId() {
@@ -75,6 +95,10 @@ public class BusynessSnapshot {
 
   public int getBusynessPct() {
     return busynessPct;
+  }
+
+  public Double getEstimatedPeople() {
+    return estimatedPeople;
   }
 
   public boolean isCovered() {

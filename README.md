@@ -30,9 +30,9 @@ LARP-scan saves you from unfortunate library larping by allowing you to gauge st
 
 ```mermaid
 flowchart LR
-    Scanner["Scanner service"] -->|"Bluetooth and Wi-Fi readings"| Server["Occupancy server"]
-    Server <-->|"Batches and floor snapshots"| Database[("PostgreSQL")]
-    Frontend["Front-end"] <--|"Requests occupancy, history, and X-Ray data"| Server
+    Scanner["Scanner"] -->|"BLE RSSI batches & AP BSSID"| Server["LARP-scan server"]
+    Server <-->|"Batches & floor snapshots"| Database[("PostgreSQL")]
+    Website["Website"] <-->|"Busyness & floor history"| Server
 ```
 
 ## Local setup

@@ -61,7 +61,7 @@ systemctl --user restart larp-scan.service
 systemctl --user stop larp-scan.service
 ```
 
-**macOS (LaunchAgent)** — build the WifiInfo helper and run `authorize()` once first (see above). Starts at login (`RunAtLoad`):
+**macOS (LaunchAgent)** — build the WifiInfo helper **before** running `install.sh` (see above): the helper is bundled into the installed package (`src/scanner/_bin/` is gitignored, so `pyproject.toml` lists it under hatch `artifacts`). `install.sh` then runs `authorize()` against the *installed* copy, which is the one the daemon launches, and aborts if the helper is missing. Allow the Location Services prompt if it appears. Bluetooth must be on: with it off, `scan-loop` exits with `Bluetooth device is turned off` and launchd restarts it every 5 s until you turn it on. Starts at login (`RunAtLoad`):
 
 ```bash
 launchctl print gui/$(id -u)/com.codejam16.larp-scan
@@ -72,7 +72,9 @@ launchctl bootout gui/$(id -u)/com.codejam16.larp-scan
 
 macOS BLE addresses are peripheral UUIDs (not MACs); the server MVP expects Linux MACs, so posting from macOS may be limited.
 
-Re-run `bash install.sh` (or `uv tool install --force .` then restart the daemon) after pulling scanner changes.
+Re-run `bash install.sh` after pulling scanner changes or rebuilding the helper. It is safe to re-run: it reinstalls with `uv tool install --force --reinstall .` (`--reinstall` stops uv from reusing a cached wheel that has a stale or missing helper) and waits for the old LaunchAgent to unload before it bootstraps the new one.
+
+uv may warn that `~/.local/bin` is not on your `PATH`. The daemon doesn't need it, because the plist and wrapper use absolute paths. Add it only if you want to run `scan-loop` / `predict-floor` from a shell.
 
 ## CLI
 

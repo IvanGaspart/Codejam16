@@ -12,7 +12,8 @@ LOCAL_BIN="${HOME}/.local/bin"
 install_cli_and_env() {
   cd "$SERVICE_DIR"
   echo "install.sh: installing scanner CLI to ~/.local/bin …"
-  uv tool install --force .
+  # --reinstall: rebuild the wheel so a freshly built WifiInfo.app isn't served from uv's cache
+  uv tool install --force --reinstall .
 
   mkdir -p "$CONFIG_DIR" "$LOCAL_BIN"
 
@@ -62,6 +63,18 @@ install_darwin() {
     exit 1
   fi
 
+  # The daemon launches the WifiInfo.app copy inside the uv tool env, so authorize that one.
+  local tool_python
+  tool_python="$(uv tool dir)/scanner/bin/python"
+  echo "install.sh: authorizing installed WifiInfo.app (allow the Location Services prompt if shown) …"
+  local auth
+  auth="$("$tool_python" -c 'from scanner import authorize; print(authorize())')"
+  echo "install.sh: authorize() -> $auth"
+  if [[ "$auth" == "helper-missing" ]]; then
+    echo "install.sh: WifiInfo.app missing from the installed package; run 'bash helper/build.sh' and re-run install.sh" >&2
+    exit 1
+  fi
+
   cp "$wrapper_src" "$wrapper_dst"
   chmod +x "$wrapper_dst"
   echo "install.sh: installed $wrapper_dst"
@@ -70,7 +83,13 @@ install_darwin() {
   cp "$plist_src" "$plist_dst"
   echo "install.sh: installed $plist_dst"
 
+  # bootout is asynchronous; bootstrapping before the old instance is gone fails with "5: Input/output error"
   launchctl bootout "$domain/$label" 2>/dev/null || true
+  local i
+  for i in {1..50}; do
+    launchctl print "$domain/$label" >/dev/null 2>&1 || break
+    sleep 0.2
+  done
   launchctl bootstrap "$domain" "$plist_dst"
   launchctl enable "$domain/$label" 2>/dev/null || true
   launchctl kickstart -k "$domain/$label" 2>/dev/null || true
@@ -80,7 +99,6 @@ install_darwin() {
   echo "  logs:    tail -f /tmp/com.codejam16.larp-scan.out.log /tmp/com.codejam16.larp-scan.err.log"
   echo "  restart: launchctl kickstart -k $domain/$label"
   echo "  stop:    launchctl bootout $domain/$label"
-  echo "install.sh: on macOS 14+, build the WifiInfo helper and run authorize() once (see README)"
 }
 
 if [[ "$OS" != "Linux" && "$OS" != "Darwin" ]]; then

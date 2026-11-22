@@ -13,8 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Stores one {@link BusynessSnapshot} per Floor of Trottier every {@code SNAPSHOT_INTERVAL}
- * (RQ-07). Snapshots hold the unsmoothed percentage and coverage from {@link BusynessCalculator};
- * they feed smoothing and history and are kept forever.
+ * (RQ-07). Snapshots hold the unsmoothed percentage, people estimate and coverage from
+ * {@link BusynessCalculator}; they feed smoothing and history and are kept forever.
  */
 @Component
 public class BusynessSnapshotJob {
@@ -59,7 +59,9 @@ public class BusynessSnapshotJob {
     Instant at = clock.instant();
     List<BusynessSnapshot> taken = calculator
         .calculate(JpaBuildingQueryService.TROTTIER_ID, at).stream()
-        .map(f -> new BusynessSnapshot(f.buildingId(), f.floor(), at, f.busynessPct(), f.covered()))
+        .map(f -> new BusynessSnapshot(
+            f.buildingId(), f.floor(), at, f.busynessPct(), f.people(), f.covered()
+        ))
         .toList();
     List<BusynessSnapshot> saved = snapshots.saveAll(taken);
     log.debug("Stored {} busyness snapshots at {}", saved.size(), at);

@@ -3,6 +3,7 @@ package codejam16.larpscan.repository;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -107,7 +108,7 @@ class EntityPersistenceTests {
 
   @Test
   void savesAndReloadsBusynessSnapshot() {
-    Long id = snapshots.save(new BusynessSnapshot("trottier", 2, T, 28, true)).getId();
+    Long id = snapshots.save(new BusynessSnapshot("trottier", 2, T, 28, 25.2, true)).getId();
     em.flush();
     em.clear();
 
@@ -117,6 +118,16 @@ class EntityPersistenceTests {
     assertEquals(2, loaded.getFloor());
     assertEquals(T, loaded.getAt());
     assertEquals(28, loaded.getBusynessPct());
+    assertEquals(25.2, loaded.getEstimatedPeople());
     assertTrue(loaded.isCovered());
+  }
+
+  @Test
+  void reloadsSnapshotStoredWithoutPeopleAsNull() {
+    Long id = snapshots.save(new BusynessSnapshot("trottier", 2, T, 28, true)).getId();
+    em.flush();
+    em.clear();
+
+    assertNull(snapshots.findById(id).orElseThrow().getEstimatedPeople());
   }
 }

@@ -100,13 +100,11 @@ public class BusynessCalculator {
   private FloorBusyness toBusyness(Floor floor, int scanners, int devices) {
     if (scanners == 0) {
       return new FloorBusyness(
-          floor.getBuildingId(), floor.getFloor(), floor.getCapacity(), false, 0, 0, 0, 0
+          floor.getBuildingId(), floor.getFloor(), floor.getCapacity(), false, 0, 0, 0.0, 0, 0
       );
     }
     double people = devices / properties.k();
-    int pct = floor.getCapacity() > 0
-        ? (int) Math.min(100, Math.round(100 * people / floor.getCapacity()))
-        : 0;
+    int pct = pctOf(people, floor.getCapacity());
     return new FloorBusyness(
         floor.getBuildingId(),
         floor.getFloor(),
@@ -114,8 +112,14 @@ public class BusynessCalculator {
         true,
         scanners,
         devices,
+        people,
         (int) Math.round(people),
         pct
     );
+  }
+
+  /** {@code min(100, 100 × people / capacity)} rounded half up; {@code 0} for non-positive capacity. */
+  static int pctOf(double people, int capacity) {
+    return capacity > 0 ? (int) Math.min(100, Math.round(100 * people / capacity)) : 0;
   }
 }

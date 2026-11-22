@@ -72,8 +72,8 @@ busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 - **Overlap:** when several Scanners are on one Floor, only the largest latest-batch count is used. That avoids double-counting devices heard by more than one Scanner, but undercounts when their ranges are disjoint. `scanners(f)` is exposed on `/floors` so the website can show how many Scanners contribute.
 - **Not covered:** the result is `level = NO_DATA`, whatever the counts are.
 - **Partial coverage:** a Scanner hears only about 10–20 m. Counts are reported as-is and not scaled up to the whole Floor.
-- **Smoothing:** the percentage shown is the mean of the last `SMOOTHING_SNAPSHOTS` snapshots.
-- **Snapshots:** every `SNAPSHOT_INTERVAL` the server stores `(floor, at, busynessPct, covered)` for every Floor. Snapshots are kept; batches are not.
+- **Smoothing:** `/floors` reports `estimatedPeople` as the mean people estimate of the covered snapshots among the last `SMOOTHING_SNAPSHOTS`, and computes `busynessPct` from that mean with the formula above, so the two always agree. Uncovered snapshots are left out; with no covered snapshot, the live values are used. Snapshots stored before people were recorded count as `busynessPct × capacity / 100` people.
+- **Snapshots:** every `SNAPSHOT_INTERVAL` the server stores `(floor, at, busynessPct, estimatedPeople, covered)` for every Floor, with `estimatedPeople` unrounded. Snapshots are kept; batches are not.
 
 | Level | busynessPct |
 |---|---|

@@ -13,6 +13,7 @@ import codejam16.larpscan.domain.BusynessLevel;
  * @param scanners count of Scanners whose latest in-window batch is on this Floor ({@code 0} when
  *     uncovered)
  * @param devices max of RSSI counts over the latest batches on this Floor
+ * @param people {@code devices / K}, unrounded; stored in snapshots so smoothing can average it
  * @param estimatedPeople {@code devices / K}, rounded half up
  * @param busynessPct {@code min(100, 100 × devices / K / capacity)}, rounded half up
  */
@@ -23,6 +24,7 @@ public record FloorBusyness(
     boolean covered,
     int scanners,
     int devices,
+    double people,
     int estimatedPeople,
     int busynessPct
 ) {

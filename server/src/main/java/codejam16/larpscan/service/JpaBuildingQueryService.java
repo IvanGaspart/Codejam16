@@ -21,14 +21,16 @@ import org.springframework.transaction.annotation.Transactional;
  * {@link BusynessSnapshot}s and {@link FloorHistoryService}. Trottier is the only Building, so it is a constant rather than a
  * table.
  *
- * <p>Smoothing (RQ-07): {@code busynessPct} is the mean of the covered snapshots among the Floor's
- * last {@code SMOOTHING_SNAPSHOTS} snapshots, rounded half up, and {@code level} is derived from
- * it. Uncovered snapshots are left out so their zeros do not drag the mean down; if none of the
- * recent snapshots is covered (e.g. just after startup), the live unsmoothed percentage is used.
+ * <p>Smoothing (RQ-07): {@code estimatedPeople} is the mean people estimate of the covered
+ * snapshots among the Floor's last {@code SMOOTHING_SNAPSHOTS} snapshots, and {@code busynessPct}
+ * is computed from that mean, so the two always agree; {@code level} is derived from the
+ * percentage. Uncovered snapshots are left out so their zeros do not drag the mean down; if none of
+ * the recent snapshots is covered (e.g. just after startup), the live unsmoothed values are used.
+ * Snapshots stored before people were recorded contribute {@code busynessPct × capacity / 100}.
  *
- * <p>{@code covered} (and so {@code NO_DATA}), {@code scanners}, and {@code estimatedPeople} come
- * from the live calculation at the request instant, not from snapshots, so a Floor shows "No data"
- * as soon as it loses coverage.
+ * <p>{@code covered} (and so {@code NO_DATA}) and {@code scanners} come from the live calculation
+ * at the request instant, not from snapshots, so a Floor shows "No data" as soon as it loses
+ * coverage.
  */
 @Service
 public class JpaBuildingQueryService implements BuildingQueryService {
@@ -94,27 +96,36 @@ public class JpaBuildingQueryService implements BuildingQueryService {
   }
 
   private FloorBusynessResponse toResponse(FloorBusyness live) {
-    int pct = live.covered() ? smoothedPct(live) : live.busynessPct();
+    int people = live.estimatedPeople();
+    int pct = live.busynessPct();
+    if (live.covered()) {
+      OptionalDouble smoothed = smoothedPeople(live);
+      if (smoothed.isPresent()) {
+        people = (int) Math.round(smoothed.getAsDouble());
+        pct = BusynessCalculator.pctOf(smoothed.getAsDouble(), live.capacity());
+      }
+    }
     return new FloorBusynessResponse(
         live.floor(),
         live.capacity(),
         live.covered(),
         live.scanners(),
-        live.estimatedPeople(),
+        people,
         pct,
         BusynessLevel.from(live.covered(), pct)
     );
   }
 
-  /** Mean of the covered snapshots among the last {@code SMOOTHING_SNAPSHOTS}, else the live pct. */
-  private int smoothedPct(FloorBusyness live) {
-    OptionalDouble mean = snapshots
+  /** Mean people of the covered snapshots among the last {@code SMOOTHING_SNAPSHOTS}, if any. */
+  private OptionalDouble smoothedPeople(FloorBusyness live) {
+    return snapshots
         .findByBuildingIdAndFloorOrderByAtDescIdDesc(
             live.buildingId(), live.floor(), Limit.of(properties.smoothingSnapshots())
         ).stream()
         .filter(BusynessSnapshot::isCovered)
-        .mapToInt(BusynessSnapshot::getBusynessPct)
+        .mapToDouble(s -> s.getEstimatedPeople() != null
+            ? s.getEstimatedPeople()
+            : s.getBusynessPct() * live.capacity() / 100.0)
         .average();
-    return mean.isPresent() ? (int) Math.round(mean.getAsDouble()) : live.busynessPct();
   }
 }

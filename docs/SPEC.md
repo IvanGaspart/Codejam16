@@ -62,13 +62,14 @@ For each Floor `f`, at time `t`:
 ```
 latest(s)          = Scanner s's most recent batch received in (t − WINDOW, t]
 covered(f)         = some Scanner's latest(s) has an AP on f
-devices(f)         = sum of |rssis| over latest(s) for every Scanner s whose latest(s) is on f
+scanners(f)        = count of Scanners whose latest(s) is on f
+devices(f)         = max of |rssis| over latest(s) for every Scanner s whose latest(s) is on f
 estimatedPeople(f) = devices(f) / K
 busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 ```
 
 - **Latest batch only:** each Scanner counts once, by its latest batch, so a device heard in every batch of the window is not counted again per batch, and a Scanner that changed Floors counts only on its current one.
-- **Overlap:** two Scanners on one Floor that hear the same device both count it. The server cannot tell, since it gets no identifiers.
+- **Overlap:** when several Scanners are on one Floor, only the largest latest-batch count is used. That avoids double-counting devices heard by more than one Scanner, but undercounts when their ranges are disjoint. `scanners(f)` is exposed on `/floors` so the website can show how many Scanners contribute.
 - **Not covered:** the result is `level = NO_DATA`, whatever the counts are.
 - **Partial coverage:** a Scanner hears only about 10–20 m. Counts are reported as-is and not scaled up to the whole Floor.
 - **Smoothing:** the percentage shown is the mean of the last `SMOOTHING_SNAPSHOTS` snapshots.
@@ -129,7 +130,7 @@ BLE addresses, CoreBluetooth UUIDs, device names, and per-device timestamps are 
 ### `GET /api/buildings/{buildingId}/floors`
 
 ```json
-[{ "floor": 1, "capacity": 120, "covered": true,
+[{ "floor": 1, "capacity": 120, "covered": true, "scanners": 2,
    "estimatedPeople": 34, "busynessPct": 28, "level": "QUIET" }]
 ```
 

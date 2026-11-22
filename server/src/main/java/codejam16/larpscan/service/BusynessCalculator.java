@@ -11,10 +11,8 @@ import java.time.Instant;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -68,20 +66,20 @@ public class BusynessCalculator {
         .collect(Collectors.toMap(AccessPoint::getBssid, AccessPoint::getFloor));
 
     Map<Integer, Integer> devicesByFloor = new HashMap<>();
-    Set<Integer> coveredFloors = new HashSet<>();
+    Map<Integer, Integer> scannersByFloor = new HashMap<>();
     for (Batch latest : latestPerScanner(at)) {
       Integer floor = floorByBssid.get(latest.getBssid());
       if (floor == null) {
         continue;
       }
-      coveredFloors.add(floor);
-      devicesByFloor.merge(floor, latest.getRssis().length, Integer::sum);
+      scannersByFloor.merge(floor, 1, Integer::sum);
+      devicesByFloor.merge(floor, latest.getRssis().length, Math::max);
     }
 
     return floors.findByBuildingIdOrderByFloorAsc(buildingId).stream()
         .map(f -> toBusyness(
             f,
-            coveredFloors.contains(f.getFloor()),
+            scannersByFloor.getOrDefault(f.getFloor(), 0),
             devicesByFloor.getOrDefault(f.getFloor(), 0)
         ))
         .toList();
@@ -99,10 +97,10 @@ public class BusynessCalculator {
     return latest.values();
   }
 
-  private FloorBusyness toBusyness(Floor floor, boolean covered, int devices) {
-    if (!covered) {
+  private FloorBusyness toBusyness(Floor floor, int scanners, int devices) {
+    if (scanners == 0) {
       return new FloorBusyness(
-          floor.getBuildingId(), floor.getFloor(), floor.getCapacity(), false, 0, 0, 0
+          floor.getBuildingId(), floor.getFloor(), floor.getCapacity(), false, 0, 0, 0, 0
       );
     }
     double people = devices / properties.k();
@@ -114,6 +112,7 @@ public class BusynessCalculator {
         floor.getFloor(),
         floor.getCapacity(),
         true,
+        scanners,
         devices,
         (int) Math.round(people),
         pct

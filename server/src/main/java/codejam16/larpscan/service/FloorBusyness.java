@@ -4,13 +4,15 @@ import codejam16.larpscan.domain.BusynessLevel;
 
 /**
  * Unsmoothed Busyness of one Floor at one instant, as computed by {@link BusynessCalculator}.
- * Uncovered Floors always carry {@code 0} devices, people and percentage.
+ * Uncovered Floors always carry {@code 0} devices, people, percentage and scanners.
  *
  * @param buildingId building identifier
  * @param floor floor number within the Building
  * @param capacity seat capacity of the Floor
  * @param covered whether some Scanner's latest batch in {@code WINDOW} is on this Floor
- * @param devices sum of RSSI counts over the latest batches on this Floor
+ * @param scanners count of Scanners whose latest in-window batch is on this Floor ({@code 0} when
+ *     uncovered)
+ * @param devices max of RSSI counts over the latest batches on this Floor
  * @param estimatedPeople {@code devices / K}, rounded half up
  * @param busynessPct {@code min(100, 100 × devices / K / capacity)}, rounded half up
  */
@@ -19,6 +21,7 @@ public record FloorBusyness(
     int floor,
     int capacity,
     boolean covered,
+    int scanners,
     int devices,
     int estimatedPeople,
     int busynessPct

@@ -26,9 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
  * it. Uncovered snapshots are left out so their zeros do not drag the mean down; if none of the
  * recent snapshots is covered (e.g. just after startup), the live unsmoothed percentage is used.
  *
- * <p>{@code covered} (and so {@code NO_DATA}) and {@code estimatedPeople} come from the live
- * calculation at the request instant, not from snapshots, so a Floor shows "No data" as soon as it
- * loses coverage.
+ * <p>{@code covered} (and so {@code NO_DATA}), {@code scanners}, and {@code estimatedPeople} come
+ * from the live calculation at the request instant, not from snapshots, so a Floor shows "No data"
+ * as soon as it loses coverage.
  */
 @Service
 public class JpaBuildingQueryService implements BuildingQueryService {
@@ -99,6 +99,7 @@ public class JpaBuildingQueryService implements BuildingQueryService {
         live.floor(),
         live.capacity(),
         live.covered(),
+        live.scanners(),
         live.estimatedPeople(),
         pct,
         BusynessLevel.from(live.covered(), pct)

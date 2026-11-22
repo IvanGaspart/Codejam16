@@ -9,6 +9,8 @@ import codejam16.larpscan.domain.BusynessLevel;
  * @param floor floor number within the Building
  * @param capacity total seat capacity of the Floor
  * @param covered whether a batch was received for this Floor within {@code WINDOW}
+ * @param scanners count of Scanners whose latest in-window batch is on this Floor ({@code 0} when
+ *     uncovered)
  * @param estimatedPeople estimated headcount ({@code 0} when uncovered)
  * @param busynessPct percentage of capacity in use, smoothed as the mean of the covered snapshots
  *     among the last {@code SMOOTHING_SNAPSHOTS} (the live value if there are none; {@code 0}
@@ -19,6 +21,7 @@ public record FloorBusynessResponse(
     int floor,
     int capacity,
     boolean covered,
+    int scanners,
     int estimatedPeople,
     int busynessPct,
     BusynessLevel level

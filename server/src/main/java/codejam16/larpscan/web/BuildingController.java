@@ -4,6 +4,7 @@ import codejam16.larpscan.service.BuildingQueryService;
 import codejam16.larpscan.web.dto.BuildingResponse;
 import codejam16.larpscan.web.dto.FloorBusynessResponse;
 import codejam16.larpscan.web.dto.FloorHistoryResponse;
+import codejam16.larpscan.web.dto.ScannerResponse;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -42,6 +43,11 @@ public class BuildingController {
   @GetMapping
   public List<BuildingResponse> listBuildings() {
     return buildingQueryService.listBuildings();
+  }
+
+  @GetMapping("/{buildingId}/scanners")
+  public List<ScannerResponse> listScanners(@PathVariable String buildingId) {
+    return buildingQueryService.listScanners(buildingId);
   }
 
   /**

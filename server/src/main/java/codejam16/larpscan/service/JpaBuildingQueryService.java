@@ -3,12 +3,15 @@ package codejam16.larpscan.service;
 import codejam16.larpscan.config.LarpProperties;
 import codejam16.larpscan.domain.BusynessLevel;
 import codejam16.larpscan.domain.BusynessSnapshot;
+import codejam16.larpscan.repository.BatchRepository;
 import codejam16.larpscan.repository.BusynessSnapshotRepository;
 import codejam16.larpscan.repository.FloorRepository;
 import codejam16.larpscan.web.dto.BuildingResponse;
 import codejam16.larpscan.web.dto.FloorBusynessResponse;
 import codejam16.larpscan.web.dto.FloorHistoryResponse;
+import codejam16.larpscan.web.dto.ScannerResponse;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.OptionalDouble;
@@ -46,6 +49,7 @@ public class JpaBuildingQueryService implements BuildingQueryService {
   private final FloorRepository floors;
   private final BusynessSnapshotRepository snapshots;
   private final LarpProperties properties;
+  private final BatchRepository batches;
   private final Clock clock;
 
   public JpaBuildingQueryService(
@@ -54,6 +58,7 @@ public class JpaBuildingQueryService implements BuildingQueryService {
       FloorRepository floors,
       BusynessSnapshotRepository snapshots,
       LarpProperties properties,
+      BatchRepository batches,
       Clock clock
   ) {
     this.calculator = calculator;
@@ -61,6 +66,7 @@ public class JpaBuildingQueryService implements BuildingQueryService {
     this.floors = floors;
     this.snapshots = snapshots;
     this.properties = properties;
+    this.batches = batches;
     this.clock = clock;
   }
 
@@ -76,6 +82,20 @@ public class JpaBuildingQueryService implements BuildingQueryService {
     return calculator.calculate(buildingId, clock.instant()).stream()
         .map(this::toResponse)
         .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<ScannerResponse> listScanners(String buildingId) {
+    requireTrottier(buildingId);
+    Instant now = clock.instant();
+    return batches.latestScannerBatches(buildingId, now.minus(BatchRepository.XRAY_LOOKBACK), now)
+        .stream().map(row -> {
+          var batch = row.batch();
+          return new ScannerResponse(batch.getScannerId(), row.floor(), batch.getLatitude(),
+              batch.getLongitude(), Duration.between(batch.getReceivedAt(), now).toSeconds(),
+              batch.getRssis());
+        }).toList();
   }
 
   @Override

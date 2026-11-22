@@ -105,11 +105,15 @@ uv run collect-aps --floor 3
 # map labelled APs → BSSID (macOS + Linux; uses ap_detect scan)
 # rebuild ap_detect WifiInfo.app first on macOS 14+: (cd ../ap_detect && bash helper/build.sh)
 uv run map-aps --authorize          # macOS Location Services once
-uv run map-aps trottier 3 12        # poll until Ctrl+C; writes ap_bssid_trottier.csv
-uv run map-aps --interactive        # prompt building/floor, then ID per cycle
+uv run map-aps trottier 3           # loop: type an AP ID, Enter to stop polling, pick a candidate
+uv run map-aps trot 3 12            # map ID 12 once (building prefixes are fine)
+uv run map-aps trottier 3 -n 4 -y   # auto-stop after 4 fresh scans and save the top candidate
+uv run map-aps trottier --list      # show saved mappings
 ```
 
-`map-aps` polls nearby APs; when you stop a cycle, the BSSID that was strongest most often is stored as `ID,floor_number,bssid` (foreign key to a teammate `ap_gps_<building>.csv`). Deduping (most recent wins per ID+floor) runs on process exit into `service/ap_bssid_<building>.csv`.
+`map-aps` polls nearby APs and ranks candidates by how often each was the strongest, then by mean RSSI. It shows the top 5 (`-k N`), and you pick one to save (Enter = #1, `r` = poll again, `s` = skip). BSSIDs that differ only in the last hex digit (the 5 SSIDs of one radio) are grouped, and the lowest one is stored (`--no-group` turns this off). macOS refreshes scan results only every ~3–10 s and returns cached copies in between, so polling runs every 0.5 s and only fresh scans are counted. The first scan of a cycle takes ~9 s.
+
+In the loop: Enter reuses the suggested next ID (12 → 13), `f 4` switches floor, `ls` / `ls all` lists mappings, and `q` quits. Each mapping is written to `service/ap_bssid_<building>.csv` (`ID,floor_number,bssid`, a foreign key to a teammate's `ap_gps_<building>.csv`) as soon as it is saved, deduped per ID+floor with the most recent winning.
 
 Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
 

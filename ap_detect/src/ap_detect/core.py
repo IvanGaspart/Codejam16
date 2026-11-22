@@ -329,11 +329,21 @@ def _linux_scan() -> list[ScannedAP]:
     return _dedupe_strongest(rows)
 
 
+# Set once an in-process CoreWLAN scan comes back with networks but no BSSIDs
+# (this process lacks Location Services). Retrying costs several seconds per
+# scan for nothing, so later scans go straight to the helper.
+_corewlan_scan_gated = False
+
+
 def _darwin_scan_corewlan() -> list[ScannedAP]:
+    global _corewlan_scan_gated
+    if _corewlan_scan_gated:
+        return []
     try:
         import CoreWLAN  # type: ignore
     except ImportError:
         log.debug("pyobjc-framework-CoreWLAN not installed")
+        _corewlan_scan_gated = True
         return []
     iface = CoreWLAN.CWWiFiClient.sharedWiFiClient().interface()
     if iface is None:
@@ -349,6 +359,9 @@ def _darwin_scan_corewlan() -> list[ScannedAP]:
         ap = _scanned(net.bssid(), net.ssid(), net.rssiValue())
         if ap:
             rows.append(ap)
+    if not rows:
+        log.debug("CoreWLAN scan returned no BSSIDs (Location gate); using helper from now on")
+        _corewlan_scan_gated = True
     return _dedupe_strongest(rows)
 
 

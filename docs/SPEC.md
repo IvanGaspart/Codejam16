@@ -86,7 +86,7 @@ busynessPct(f)     = min(100, 100 × estimatedPeople(f) / capacity(f))
 | Name | Default | Note |
 |---|---|---|
 | `BATCH_INTERVAL` | 15 s | Scanner POST period |
-| `RSSI_FLOOR` | −85 dBm | Scanner drops weaker devices |
+| `RSSI_FLOOR` | −75 dBm | Scanner drops weaker devices |
 | `WINDOW` | 120 s | How long a Scanner's latest batch stays valid. Several `BATCH_INTERVAL`s, so one dropped POST does not flip a Floor to "No data". |
 | `K` | 2.5 | Devices per person. Calibrate once by counting heads on one Floor. |
 | `SNAPSHOT_INTERVAL` | 60 s | |

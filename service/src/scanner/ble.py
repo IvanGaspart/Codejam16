@@ -20,7 +20,7 @@ from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.backends.scanner import AdvertisementData
 
-RSSI_FLOOR = -85
+RSSI_FLOOR = -80
 
 _MAC_RE = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 _UUID_RE = re.compile(

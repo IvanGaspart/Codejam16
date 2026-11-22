@@ -10,7 +10,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from .wifi import get_current_ap
+from ap_detect import get_current_ap
 
 MAC_RE = re.compile(r"(?<![0-9a-f:])([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})(?![0-9a-f:])", re.I)
 

@@ -36,12 +36,12 @@ Check with `ls -lO "$UV_PROJECT_ENVIRONMENT/lib/python3.13/site-packages/"*.pth`
 
 ### macOS: build the helper (once)
 
-On macOS 14+, a small helper app is needed to read the BSSID (Location Services). Build after cloning (needs Xcode CLT):
+On macOS 14+, a small helper app is needed to read the BSSID (Location Services). It lives in `ap_detect`, which the scanner uses for both the connected AP and nearby scans. Build after cloning (needs Xcode CLT):
 
 ```bash
-xcode-select --install     # skip if already installed
-bash helper/build.sh       # creates src/scanner/_bin/WifiInfo.app
-uv run python -c "from scanner import authorize; print(authorize())"
+xcode-select --install          # skip if already installed
+bash ../ap_detect/helper/build.sh   # creates ../ap_detect/src/ap_detect/_bin/WifiInfo.app
+uv run python -c "from ap_detect import authorize; print(authorize())"
 ```
 
 Allow the one-time Location Services prompt for **WifiInfo**. After that, `get_current_ap()` / `predict-floor` work silently.
@@ -70,7 +70,7 @@ systemctl --user restart larp-scan.service
 systemctl --user stop larp-scan.service
 ```
 
-**macOS (LaunchAgent)** — the WifiInfo helper is bundled into the installed package (`src/scanner/_bin/` is gitignored, so `pyproject.toml` lists it under hatch `artifacts`). If it hasn't been built yet (e.g. a fresh clone), `install.sh` runs `helper/build.sh` first, which needs the Xcode CLT. It then runs `authorize()` against the *installed* copy, which is the one the daemon launches. Allow the Location Services prompt within 90 s. It aborts with `helper-missing` if the app isn't in the installed package, or `helper-failed` if the app is there but didn't launch or the prompt timed out. On a launch failure, the line above it (`WifiInfo.app launch failed (open exit N): …`) gives the reason from `open`, e.g. a missing arch slice or a non-executable binary. Fix that, then re-run `install.sh`. Bluetooth must be on: with it off, `scan-loop` exits with `Bluetooth device is turned off` and launchd restarts it every 5 s until you turn it on. Starts at login (`RunAtLoad`):
+**macOS (LaunchAgent)** — the WifiInfo helper ships inside the installed `ap-detect` package, and it is the only helper the daemon launches. Two builds under the same bundle ID make Location Services drop the grant and prompt again on every scan. If it hasn't been built yet (e.g. a fresh clone), `install.sh` runs `../ap_detect/helper/build.sh` first, which needs the Xcode CLT. It then runs `ap_detect.authorize()` against the *installed* copy, which is the one the daemon launches. Allow the Location Services prompt within 90 s. It aborts with `helper-missing` if the app isn't in the installed package, didn't launch, or the prompt timed out. Fix that, then re-run `install.sh`. Bluetooth must be on: with it off, `scan-loop` exits with `Bluetooth device is turned off` and launchd restarts it every 5 s until you turn it on. Starts at login (`RunAtLoad`):
 
 ```bash
 launchctl print gui/$(id -u)/com.codejam16.larp-scan
@@ -103,7 +103,6 @@ uv run scan-loop --no-post
 uv run collect-aps --floor 3
 
 # map labelled APs → BSSID (macOS + Linux; uses ap_detect scan)
-# rebuild ap_detect WifiInfo.app first on macOS 14+: (cd ../ap_detect && bash helper/build.sh)
 uv run map-aps --authorize          # macOS Location Services once
 uv run map-aps trottier 3           # loop: type an AP ID, Enter to stop polling, pick a candidate
 uv run map-aps trot 3 12            # map ID 12 once (building prefixes are fine)
@@ -141,9 +140,7 @@ service/
   uv.lock
   install.sh              # systemd (Linux) / LaunchAgent (macOS)
   deploy/                 # unit, plist, launchd wrapper, env example
-  helper/                 # macOS WifiInfo.app build
   src/scanner/
-    wifi.py
     predict.py
     collect.py
     ble.py
@@ -155,7 +152,6 @@ service/
 
 | Module | Role |
 |--------|------|
-| `wifi` | Connected BSSID/SSID (`get_current_ap`, `authorize`) |
 | `predict` | Floor lookup + `predict-floor` CLI |
 | `collect` | Linux survey walk CLI |
 | `ble` | Bleak scan buffer (RSSI floor, no names) |

@@ -1,3 +1,3 @@
-from .core import authorize, get_current_ap
+from .core import ScannedAP, authorize, get_current_ap, scan_nearby_aps
 
-__all__ = ["authorize", "get_current_ap"]
+__all__ = ["ScannedAP", "authorize", "get_current_ap", "scan_nearby_aps"]

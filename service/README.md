@@ -12,29 +12,27 @@ LARP-scan **scanner** package: predict Trottier floor from Wi-Fi BSSID, sniff ne
 
 ```bash
 cd service
-uv sync
+# required if the repo is under iCloud Documents (see Install)
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"
+uv sync --group dev
 uv run predict-floor
 uv run scan-loop
+uv run map-aps --help
 uv run python -m scanner
 ```
 
 ## Install
 
-```bash
-cd service
-uv sync
-```
-
 On macOS this also installs `pyobjc-framework-CoreWLAN`.
 
-**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` and `~/Desktop` with "Desktop & Documents Folders" on), iCloud sets the macOS `hidden` flag on every dot-directory, including `.venv`, a few seconds after it is written, and Python 3.13+ ignores hidden `.pth` files. The editable install `uv sync` creates is a `.pth`, so every `uv run …` fails with `ModuleNotFoundError: No module named 'scanner'` even though `uv sync` reports success (it works for a few seconds right after a sync, then stops). `chflags nohidden` is undone by iCloud within seconds. Put the environment outside the synced tree instead, before `uv sync`:
+**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` / `~/Desktop` with Desktop & Documents Folders on), iCloud sets `UF_HIDDEN` on files inside dotted dirs like `.venv`. Python 3.13+ then logs `Skipping hidden .pth file` and editable installs fail (`ModuleNotFoundError`) even though `uv sync` succeeded. `chflags nohidden` is undone within seconds. Before `uv sync`:
 
 ```bash
 export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"   # add to ~/.zshrc
-uv sync
+uv sync --group dev
 ```
 
-Check with `ls -lO .venv/lib/python3.13/site-packages/*.pth`: a `hidden` column means you're affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`, which iCloud doesn't touch.
+Check with `ls -lO "$UV_PROJECT_ENVIRONMENT/lib/python3.13/site-packages/"*.pth` — a `hidden` column means you're still affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`.
 
 ### macOS: build the helper (once)
 
@@ -103,7 +101,15 @@ uv run scan-loop --no-post
 
 # survey walk (Linux): append visible APs at a floor into ../data/survey/
 uv run collect-aps --floor 3
+
+# map labelled APs → BSSID (macOS + Linux; uses ap_detect scan)
+# rebuild ap_detect WifiInfo.app first on macOS 14+: (cd ../ap_detect && bash helper/build.sh)
+uv run map-aps --authorize          # macOS Location Services once
+uv run map-aps trottier 3 12        # poll until Ctrl+C; writes ap_bssid_trottier.csv
+uv run map-aps --interactive        # prompt building/floor, then ID per cycle
 ```
+
+`map-aps` polls nearby APs; when you stop a cycle, the BSSID that was strongest most often is stored as `ID,floor_number,bssid` (foreign key to a teammate `ap_gps_<building>.csv`). Deduping (most recent wins per ID+floor) runs on process exit into `service/ap_bssid_<building>.csv`.
 
 Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
 

@@ -29,7 +29,7 @@ larp:
   # How long a Scanner's latest batch stays valid for counts & coverage (RQ-02, RQ-10)
   window-seconds: ${LARP_WINDOW_SECONDS:120}
   # Average number of BLE devices per person (calibrated once on one Trottier floor)
-  k: ${LARP_K:2.5}
+  k: ${LARP_K:2.0}
   # Snapshot job period in milliseconds (60s default)
   snapshot-interval-ms: ${LARP_SNAPSHOT_INTERVAL_MS:60000}
   # Number of recent snapshots averaged for smoothed busyness percentage (RQ-07)
@@ -42,7 +42,7 @@ larp:
   close-rssi: ${LARP_CLOSE_RSSI:-65}
   far-d: ${LARP_FAR_D:30.5}
   far-rssi: ${LARP_FAR_RSSI:-80}
-  far-downscale-factor: ${LARP_FAR_DOWNSCALE_FACTOR:0.8}
+  far-downscale-factor: ${LARP_FAR_DOWNSCALE_FACTOR:0.6}
   # Wi-Fi path-loss model used to trilaterate Scanners from the APs they hear:
   # distance = 10^((ap-rssi-at1m - rssi) / (10 × path-loss-exponent)) metres
   ap-rssi-at1m: ${LARP_AP_RSSI_AT_1M:-40}

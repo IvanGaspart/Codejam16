@@ -1,0 +1,3 @@
+.build/
+src/ap_detect/_bin/
+__pycache__/

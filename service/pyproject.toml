@@ -24,3 +24,5 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/scanner"]
+# _bin/ is gitignored (built locally by helper/build.sh); artifacts ships it anyway
+artifacts = ["src/scanner/_bin/**"]

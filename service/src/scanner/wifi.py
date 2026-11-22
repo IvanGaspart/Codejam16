@@ -18,10 +18,7 @@ Services trusts. Backends are tried in this order:
 2. WifiInfo.app -- a small bundled helper (build it with helper/build.sh) that
    has its own Location Services entry. One permission prompt on first use,
    then silent. Path: next to this file, or $IW_HELPER.
-3. `shortcuts run <name>` -- a Shortcut that uses the "Get Network Details"
-   action and outputs the BSSID. Name defaults to "GetBSSID"; override with
-   the IW_SHORTCUT environment variable.
-4. `system_profiler` (only works on macOS < 14).
+3. `system_profiler` (only works on macOS < 14).
 """
 from __future__ import annotations
 
@@ -39,7 +36,6 @@ from typing import TypedDict
 log = logging.getLogger(__name__)
 
 _MAC_RE = re.compile(r"(?<![0-9a-f:])([0-9a-f]{1,2}(?::[0-9a-f]{1,2}){5})(?![0-9a-f:])", re.I)
-_DEFAULT_SHORTCUT = "GetBSSID"
 
 
 class AP(TypedDict):
@@ -145,7 +141,15 @@ def run_helper() -> dict | None:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.json"
         # -W waits for exit, -n forces a fresh instance
-        if _run(["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)], timeout=90) is None:
+        cmd = ["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("WifiInfo.app launch failed: %r", exc)
+            return None
+        if proc.returncode != 0:
+            # surface LaunchServices' reason (e.g. -10669 bad CPU type, -10661 not executable)
+            log.warning("WifiInfo.app launch failed (open exit %d): %s", proc.returncode, proc.stderr.strip())
             return None
         try:
             return json.loads(out.read_text())
@@ -157,14 +161,17 @@ def authorize() -> str:
     """Trigger the macOS Location Services prompt for the helper (macOS only).
 
     Returns "granted", "denied", "timeout", "unclear" (permission may be fine
-    but no Wi-Fi data came back, e.g. not connected), "helper-missing", or
+    but no Wi-Fi data came back, e.g. not connected), "helper-missing",
+    "helper-failed" (app present but `open` failed or timed out), or
     "not-needed" on other platforms.
     """
     if platform.system() != "Darwin":
         return "not-needed"
+    if _helper_path() is None:
+        return "helper-missing"
     data = run_helper()
     if data is None:
-        return "helper-missing"
+        return "helper-failed"
     if data.get("bssid"):
         return "granted"
     return {"denied": "denied", "timeout": "timeout"}.get(data.get("error"), "unclear")
@@ -178,14 +185,6 @@ def _darwin_helper() -> AP | None:
         log.debug("WifiInfo.app reported: %s", data["error"])
         return None
     return _ap(data.get("bssid"), data.get("ssid"))
-
-
-def _darwin_shortcut() -> AP | None:
-    if not shutil.which("shortcuts"):
-        return None
-    name = os.environ.get("IW_SHORTCUT", _DEFAULT_SHORTCUT)
-    out = _run(["shortcuts", "run", name], timeout=20)
-    return _ap(out)  # the shortcut only outputs the BSSID
 
 
 def _darwin_system_profiler() -> AP | None:
@@ -204,7 +203,7 @@ def _darwin_system_profiler() -> AP | None:
 
 
 def _darwin() -> AP | None:
-    for backend in (_darwin_corewlan, _darwin_helper, _darwin_shortcut, _darwin_system_profiler):
+    for backend in (_darwin_corewlan, _darwin_helper, _darwin_system_profiler):
         try:
             ap = backend()
         except Exception as exc:  # a backend must never crash the caller
@@ -215,10 +214,8 @@ def _darwin() -> AP | None:
     log.warning(
         "Could not read the BSSID. On macOS 14+ grant Location Services to your "
         "terminal app (System Settings > Privacy & Security > Location Services) "
-        "and `pip install pyobjc-framework-CoreWLAN`, or create a Shortcut named "
-        "%r (set IW_SHORTCUT to use another name) that outputs 'Get Network "
-        "Details' > BSSID.",
-        os.environ.get("IW_SHORTCUT", _DEFAULT_SHORTCUT),
+        "and `pip install pyobjc-framework-CoreWLAN`, or build WifiInfo.app with "
+        "helper/build.sh and run authorize()."
     )
     return None
 

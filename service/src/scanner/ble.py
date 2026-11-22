@@ -5,8 +5,8 @@ Addresses are deduplicated within each interval (strongest RSSI wins).
 
 On Linux/Windows, ``device.address`` is a Bluetooth MAC. On macOS,
 CoreBluetooth hides MACs and bleak reports a peripheral UUID instead —
-we accept both so ``scan-loop`` works locally. The server batch DTO
-currently requires MAC form; Linux scanners are the POST path for MVP.
+we accept both. Addresses are only used for local dedup; batches send
+RSSI values alone (ADR-0002), so macOS and Linux scanners post the same way.
 """
 
 from __future__ import annotations

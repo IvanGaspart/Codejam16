@@ -1,0 +1,14 @@
+[Unit]
+Description=LARP-scan BLE scanner (scan-loop)
+After=network-online.target bluetooth.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/larp-scan/env
+ExecStart=%h/.local/bin/scan-loop
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

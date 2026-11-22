@@ -4,9 +4,12 @@ import codejam16.larpscan.config.LarpProperties;
 import codejam16.larpscan.domain.BusynessLevel;
 import codejam16.larpscan.domain.BusynessSnapshot;
 import codejam16.larpscan.repository.BusynessSnapshotRepository;
+import codejam16.larpscan.repository.FloorRepository;
 import codejam16.larpscan.web.dto.BuildingResponse;
 import codejam16.larpscan.web.dto.FloorBusynessResponse;
+import codejam16.larpscan.web.dto.FloorHistoryResponse;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
 import java.util.OptionalDouble;
 import org.springframework.data.domain.Limit;
@@ -14,8 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link BuildingQueryService} backed by {@link BusynessCalculator} and the stored
- * {@link BusynessSnapshot}s. Trottier is the only Building, so it is a constant rather than a
+ * {@link BuildingQueryService} backed by {@link BusynessCalculator}, the stored
+ * {@link BusynessSnapshot}s and {@link FloorHistoryService}. Trottier is the only Building, so it is a constant rather than a
  * table.
  *
  * <p>Smoothing (RQ-07): {@code busynessPct} is the mean of the covered snapshots among the Floor's
@@ -37,17 +40,23 @@ public class JpaBuildingQueryService implements BuildingQueryService {
       new BuildingResponse(TROTTIER_ID, "Trottier Building");
 
   private final BusynessCalculator calculator;
+  private final FloorHistoryService history;
+  private final FloorRepository floors;
   private final BusynessSnapshotRepository snapshots;
   private final LarpProperties properties;
   private final Clock clock;
 
   public JpaBuildingQueryService(
       BusynessCalculator calculator,
+      FloorHistoryService history,
+      FloorRepository floors,
       BusynessSnapshotRepository snapshots,
       LarpProperties properties,
       Clock clock
   ) {
     this.calculator = calculator;
+    this.history = history;
+    this.floors = floors;
     this.snapshots = snapshots;
     this.properties = properties;
     this.clock = clock;
@@ -61,12 +70,27 @@ public class JpaBuildingQueryService implements BuildingQueryService {
   @Override
   @Transactional(readOnly = true)
   public List<FloorBusynessResponse> listFloors(String buildingId) {
-    if (!TROTTIER.id().equals(buildingId)) {
-      throw new BuildingNotFoundException(buildingId);
-    }
+    requireTrottier(buildingId);
     return calculator.calculate(buildingId, clock.instant()).stream()
         .map(this::toResponse)
         .toList();
+  }
+
+  @Override
+  public List<FloorHistoryResponse> getFloorHistory(String buildingId, int floor, Instant since) {
+    requireTrottier(buildingId);
+    if (!floors.existsByBuildingIdAndFloor(buildingId, floor)) {
+      throw new FloorNotFoundException(buildingId, floor);
+    }
+    return history.history(buildingId, floor, since).stream()
+        .map(s -> new FloorHistoryResponse(s.getAt(), s.getBusynessPct(), s.isCovered()))
+        .toList();
+  }
+
+  private static void requireTrottier(String buildingId) {
+    if (!TROTTIER.id().equals(buildingId)) {
+      throw new BuildingNotFoundException(buildingId);
+    }
   }
 
   private FloorBusynessResponse toResponse(FloorBusyness live) {

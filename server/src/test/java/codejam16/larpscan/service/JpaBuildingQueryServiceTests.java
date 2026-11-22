@@ -54,11 +54,14 @@ class JpaBuildingQueryServiceTests {
     accessPoints.save(new AccessPoint(AP_FLOOR_1, BUILDING, 1));
     LarpProperties props =
         new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5);
+    Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     service = new JpaBuildingQueryService(
         new BusynessCalculator(batches, floors, accessPoints, props),
+        new FloorHistoryService(snapshots, floors, clock),
+        floors,
         snapshots,
         props,
-        Clock.fixed(NOW, ZoneOffset.UTC)
+        clock
     );
   }
 

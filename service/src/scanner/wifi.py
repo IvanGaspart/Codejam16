@@ -141,7 +141,15 @@ def run_helper() -> dict | None:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.json"
         # -W waits for exit, -n forces a fresh instance
-        if _run(["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)], timeout=90) is None:
+        cmd = ["open", "-W", "-n", "-a", str(app), "--args", "--out", str(out)]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+        except (OSError, subprocess.SubprocessError) as exc:
+            log.warning("WifiInfo.app launch failed: %r", exc)
+            return None
+        if proc.returncode != 0:
+            # surface LaunchServices' reason (e.g. -10669 bad CPU type, -10661 not executable)
+            log.warning("WifiInfo.app launch failed (open exit %d): %s", proc.returncode, proc.stderr.strip())
             return None
         try:
             return json.loads(out.read_text())

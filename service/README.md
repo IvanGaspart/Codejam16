@@ -41,9 +41,9 @@ Allow the one-time Location Services prompt for **WifiInfo**. After that, `get_c
 
 Linux and Windows need no build step.
 
-### Daemon (systemd, Linux)
+### Daemon (systemd / launchd)
 
-Installs `scan-loop` to `~/.local/bin` and enables a **user** unit (BlueZ/session D-Bus):
+Installs `scan-loop` to `~/.local/bin` and enables a **user** daemon (systemd on Linux, LaunchAgent on macOS):
 
 ```bash
 cd service
@@ -52,6 +52,8 @@ cd service
 bash install.sh
 ```
 
+**Linux (systemd user unit)** — BlueZ/session D-Bus; linger so it can run without an interactive login:
+
 ```bash
 systemctl --user status larp-scan.service
 journalctl --user -u larp-scan.service -f
@@ -59,7 +61,18 @@ systemctl --user restart larp-scan.service
 systemctl --user stop larp-scan.service
 ```
 
-Re-run `bash install.sh` (or `uv tool install --force .` then `systemctl --user restart larp-scan`) after pulling scanner changes. Linger is enabled so the service can run without an interactive login.
+**macOS (LaunchAgent)** — build the WifiInfo helper and run `authorize()` once first (see above). Starts at login (`RunAtLoad`):
+
+```bash
+launchctl print gui/$(id -u)/com.codejam16.larp-scan
+tail -f /tmp/com.codejam16.larp-scan.out.log /tmp/com.codejam16.larp-scan.err.log
+launchctl kickstart -k gui/$(id -u)/com.codejam16.larp-scan
+launchctl bootout gui/$(id -u)/com.codejam16.larp-scan
+```
+
+macOS BLE addresses are peripheral UUIDs (not MACs); the server MVP expects Linux MACs, so posting from macOS may be limited.
+
+Re-run `bash install.sh` (or `uv tool install --force .` then restart the daemon) after pulling scanner changes.
 
 ## CLI
 
@@ -102,8 +115,8 @@ Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packa
 service/
   pyproject.toml          # uv project name: scanner
   uv.lock
-  install.sh              # systemd user unit (Linux)
-  deploy/                 # larp-scan.service + env example
+  install.sh              # systemd (Linux) / LaunchAgent (macOS)
+  deploy/                 # unit, plist, launchd wrapper, env example
   helper/                 # macOS WifiInfo.app build
   src/scanner/
     wifi.py

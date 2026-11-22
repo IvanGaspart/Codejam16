@@ -1,160 +1,38 @@
-# service
+# Scanner service
 
-LARP-scan **scanner** package: predict Trottier floor from Wi-Fi BSSID, sniff nearby BLE devices, and emit periodic updates ready for `POST /api/batches`.
+The Python service runs on a laptop connected to Wi-Fi. Every 15 seconds it sends the server one Bluetooth signal strength per distinct device, the connected Wi-Fi access point, and nearby access-point readings. The server uses these to estimate floor occupancy and scanner position. Bluetooth device identifiers stay on the laptop.
 
-```python
->>> from scanner import predict_floor, get_current_ap
->>> get_current_ap()
-{'bssid': '44:48:c1:a4:39:50', 'ssid': 'wpa.mcgill.ca'}
->>> predict_floor()
-{'known': True, 'floor': 3, 'bssid': '…', 'ssid': 'wpa.mcgill.ca', 'confidence': 'high'}
-```
+## Install and run
 
-```bash
+From the repository root, enter `service/`. You need uv, Python 3.13 or later, and working Wi-Fi and Bluetooth. On Linux, enable BlueZ and install `iw` for nearby Wi-Fi scans.
+
+```sh
 cd service
-# required if the repo is under iCloud Documents (see Install)
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"
-uv sync --group dev
-uv run predict-floor
-uv run scan-loop
-uv run map-aps --help
-uv run python -m scanner
 ```
 
-## Install
+On macOS 14 or later, install the Xcode Command Line Tools and build the Wi-Fi helper **before** syncing dependencies so uv packages the built app. For an iCloud-synced checkout, first set `UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"` with `export`.
 
-On macOS this also installs `pyobjc-framework-CoreWLAN`.
-
-**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` / `~/Desktop` with Desktop & Documents Folders on), iCloud sets `UF_HIDDEN` on files inside dotted dirs like `.venv`. Python 3.13+ then logs `Skipping hidden .pth file` and editable installs fail (`ModuleNotFoundError`) even though `uv sync` succeeded. `chflags nohidden` is undone within seconds. Before `uv sync`:
-
-```bash
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"   # add to ~/.zshrc
-uv sync --group dev
+```sh
+# macOS 14+ only
+bash ../ap_detect/helper/build.sh
 ```
 
-Check with `ls -lO "$UV_PROJECT_ENVIRONMENT/lib/python3.13/site-packages/"*.pth` — a `hidden` column means you're still affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`.
-
-### macOS: build the helper (once)
-
-On macOS 14+, a small helper app is needed to read the BSSID (Location Services). It lives in `ap_detect`, which the scanner uses for both the connected AP and nearby scans. Build after cloning (needs Xcode CLT):
-
-```bash
-xcode-select --install          # skip if already installed
-bash ../ap_detect/helper/build.sh   # creates ../ap_detect/src/ap_detect/_bin/WifiInfo.app
-uv run python -c "from ap_detect import authorize; print(authorize())"
+```sh
+uv sync --locked
 ```
 
-Allow the one-time Location Services prompt for **WifiInfo**. After that, `get_current_ap()` / `predict-floor` work silently.
+On macOS 14 or later, run `uv run python -m ap_detect --authorize` and allow the WifiInfo Location Services prompt. Run `uv run predict-floor` to check the connected access point and floor.
 
-Linux and Windows need no build step.
+Start the [server](../server/README.md), then run the scanner. Use the server’s reachable URL if it runs on another machine, and match its API key.
 
-### Daemon (systemd / launchd)
-
-Installs `scan-loop` to `~/.local/bin` and enables a **user** daemon (systemd on Linux, LaunchAgent on macOS):
-
-```bash
-cd service
-# edit secrets after first run if the example was seeded:
-#   ~/.config/larp-scan/env
-bash install.sh
-```
-
-Run it as yourself, **never with `sudo`**: everything it writes (`~/.local/share/uv/tools/scanner`, `~/.local/bin`, the LaunchAgent / systemd user unit) lives in your home. A `sudo` run leaves root-owned files there and every later unprivileged `install.sh` fails inside `uv tool install --force` with `failed to remove file … uv-receipt.toml: Permission denied`. `install.sh` now refuses to run as root and aborts early if it finds files it doesn't own, printing the `sudo rm -rf …` needed to clean up.
-
-**Linux (systemd user unit)** — BlueZ/session D-Bus; linger so it can run without an interactive login:
-
-```bash
-systemctl --user status larp-scan.service
-journalctl --user -u larp-scan.service -f
-systemctl --user restart larp-scan.service
-systemctl --user stop larp-scan.service
-```
-
-**macOS (LaunchAgent)** — the WifiInfo helper ships inside the installed `ap-detect` package, and it is the only helper the daemon launches. Two builds under the same bundle ID make Location Services drop the grant and prompt again on every scan. If it hasn't been built yet (e.g. a fresh clone), `install.sh` runs `../ap_detect/helper/build.sh` first, which needs the Xcode CLT. It then runs `ap_detect.authorize()` against the *installed* copy, which is the one the daemon launches. Allow the Location Services prompt within 90 s. It aborts with `helper-missing` if the app isn't in the installed package, didn't launch, or the prompt timed out. Fix that, then re-run `install.sh`. Bluetooth must be on: with it off, `scan-loop` exits with `Bluetooth device is turned off` and launchd restarts it every 5 s until you turn it on. Starts at login (`RunAtLoad`):
-
-```bash
-launchctl print gui/$(id -u)/com.codejam16.larp-scan
-tail -f /tmp/com.codejam16.larp-scan.out.log /tmp/com.codejam16.larp-scan.err.log
-launchctl kickstart -k gui/$(id -u)/com.codejam16.larp-scan
-launchctl bootout gui/$(id -u)/com.codejam16.larp-scan
-```
-
-On macOS, BLE devices show up as peripheral UUIDs instead of MACs. This doesn't affect posting: batches carry only the RSSI array (ADR-0002), so macOS scanners post the same way Linux ones do.
-
-Re-run `bash install.sh` after pulling scanner changes or rebuilding the helper. It is safe to re-run: it reinstalls with `uv tool install --force --reinstall .` (`--reinstall` stops uv from reusing a cached wheel that has a stale or missing helper), waits for the old LaunchAgent to unload before it bootstraps the new one, and re-enables the agent if it was turned off with `launchctl disable`.
-
-uv may warn that `~/.local/bin` is not on your `PATH`. The daemon doesn't need it, because the plist and wrapper use absolute paths. Add it only if you want to run `scan-loop` / `predict-floor` from a shell.
-
-## CLI
-
-```bash
-# predict current floor from the connected AP
-uv run predict-floor
-
-# continuous floor + BLE updates; POST RSSI batches (needs env below)
+```sh
 export LARP_SERVER_URL=http://localhost:8080
 export LARP_API_KEY=dev-local-key
 uv run scan-loop
-
-# local only (no HTTP)
-uv run scan-loop --no-post
-
-# survey walk (Linux): append visible APs at a floor into ../data/survey/
-uv run collect-aps --floor 3
-
-# map labelled APs → BSSID (macOS + Linux; uses ap_detect scan)
-uv run map-aps --authorize          # macOS Location Services once
-uv run map-aps trottier 3           # loop: type an AP ID, Enter to stop polling, pick a candidate
-uv run map-aps trot 3 12            # map ID 12 once (building prefixes are fine)
-uv run map-aps trottier 3 -n 4 -y   # auto-stop after 4 fresh scans and save the top candidate
-uv run map-aps trottier --list      # show saved mappings
 ```
 
-`map-aps` polls nearby APs and ranks candidates by how often each was the strongest, then by mean RSSI. It shows the top 5 (`-k N`), and you pick one to save (Enter = #1, `r` = poll again, `s` = skip). BSSIDs that differ only in the last hex digit (the 5 SSIDs of one radio) are grouped, and the lowest one is stored (`--no-group` turns this off). macOS refreshes scan results only every ~3–10 s and returns cached copies in between, so polling runs every 0.5 s and only fresh scans are counted. The first scan of a cycle takes ~9 s.
+Use `uv run scan-loop --no-post` to inspect readings locally, `uv run map-aps --help` to survey access points, or `uv run pytest` to run the tests.
 
-In the loop: Enter reuses the suggested next ID (12 → 13), `f 4` switches floor, `ls` / `ls all` lists mappings, and `q` quits. Each mapping is written to `service/ap_bssid_<building>.csv` (`ID,floor_number,bssid`, a foreign key to a teammate's `ap_gps_<building>.csv`) as soon as it is saved, deduped per ID+floor with the most recent winning.
+## Run at login
 
-Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
-
-```json
-{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72],
-  "aps": [{ "bssid": "44:48:c1:a4:1a:52", "rssi": -48 }] }
-```
-
-`sightings` is raw RSSI ints only (may be `[]`); the server splits them into close/far strata with its own thresholds (`larp.close-rssi` / `larp.far-rssi`), so keep `RSSI_FLOOR` (-80) ≤ `larp.far-rssi`. `aps` is the nearby Wi-Fi APs from `ap_detect.scan_nearby_aps()` (lowercase BSSID, strongest per BSSID, strongest-first, ≤ 64, `[]` if the scan fails) for server-side trilateration. Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
-
-Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packaged lookup lives in `src/scanner/data/`.
-
-## Data
-
-| File | Role |
-|------|------|
-| `src/scanner/data/floor_ap_lookup.csv` | BSSID → floor with confidence / RSSI margin |
-| `src/scanner/data/trottier.csv` | Server-ready `bssid,floor` (RQ-03) |
-
-## Layout
-
-```text
-service/
-  pyproject.toml          # uv project name: scanner
-  uv.lock
-  install.sh              # systemd (Linux) / LaunchAgent (macOS)
-  deploy/                 # unit, plist, launchd wrapper, env example
-  src/scanner/
-    predict.py
-    collect.py
-    ble.py
-    scan_loop.py
-    config.py
-    poster.py
-    data/
-```
-
-| Module | Role |
-|--------|------|
-| `predict` | Floor lookup + `predict-floor` CLI |
-| `collect` | Linux survey walk CLI |
-| `ble` | Bleak scan buffer (RSSI floor, no names) |
-| `scan_loop` | Periodic floor + BLE + nearby APs + POST + `scan-loop` CLI |
-| `config` | `LARP_SERVER_URL` / `LARP_API_KEY` / scanner-id file |
-| `poster` | `POST /api/batches` with `sightings` + `aps` (httpx) |
+From `service/`, run `bash install.sh` as your regular user. It installs a systemd user service on Linux or a LaunchAgent on macOS. Edit the generated `~/.config/larp-scan/env` to set the server URL and key. After editing, restart with `systemctl --user restart larp-scan.service` on Linux or `launchctl kickstart -k gui/$(id -u)/com.codejam16.larp-scan` on macOS. Re-run the installer after updating the scanner.

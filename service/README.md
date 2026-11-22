@@ -118,10 +118,11 @@ In the loop: Enter reuses the suggested next ID (12 → 13), `f 4` switches floo
 Every 15 s `scan-loop` POSTs FX-01.2 `BatchRequest` to `{LARP_SERVER_URL}/api/batches`:
 
 ```json
-{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72] }
+{ "scannerId", "bssid", "sentAt", "sightings": [-67, -72],
+  "aps": [{ "bssid": "44:48:c1:a4:1a:52", "rssi": -48 }] }
 ```
 
-`sightings` is RSSI ints only (may be `[]`). Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
+`sightings` is raw RSSI ints only (may be `[]`); the server splits them into close/far strata with its own thresholds (`larp.close-rssi` / `larp.far-rssi`), so keep `RSSI_FLOOR` (-80) ≤ `larp.far-rssi`. `aps` is the nearby Wi-Fi APs from `ap_detect.scan_nearby_aps()` (lowercase BSSID, strongest per BSSID, strongest-first, ≤ 64, `[]` if the scan fails) for server-side trilateration. Offline ticks are skipped. Scanner UUID is created at `~/.config/larp-scan/scanner-id`.
 
 Raw survey CSVs under `/data/` are gitignored (see repo `.gitignore`). The packaged lookup lives in `src/scanner/data/`.
 
@@ -158,6 +159,6 @@ service/
 | `predict` | Floor lookup + `predict-floor` CLI |
 | `collect` | Linux survey walk CLI |
 | `ble` | Bleak scan buffer (RSSI floor, no names) |
-| `scan_loop` | Periodic floor + BLE + POST + `scan-loop` CLI |
+| `scan_loop` | Periodic floor + BLE + nearby APs + POST + `scan-loop` CLI |
 | `config` | `LARP_SERVER_URL` / `LARP_API_KEY` / scanner-id file |
-| `poster` | `POST /api/batches` (httpx) |
+| `poster` | `POST /api/batches` with `sightings` + `aps` (httpx) |

@@ -34,3 +34,15 @@ larp:
   snapshot-interval-ms: ${LARP_SNAPSHOT_INTERVAL_MS:60000}
   # Number of recent snapshots averaged for smoothed busyness percentage (RQ-07)
   smoothing-snapshots: ${LARP_SMOOTHING_SNAPSHOTS:5}
+  # Sighting strata: devices at rssi >= close-rssi (dBm) are within close-d metres of the Scanner;
+  # devices in [far-rssi, close-rssi) are within far-d metres and weigh far-downscale-factor; weaker
+  # ones are ignored. Keep far-rssi >= the Scanner's RSSI_FLOOR (-80).
+  close-d: ${LARP_CLOSE_D:3.0}
+  close-rssi: ${LARP_CLOSE_RSSI:-65}
+  far-d: ${LARP_FAR_D:8.0}
+  far-rssi: ${LARP_FAR_RSSI:-80}
+  far-downscale-factor: ${LARP_FAR_DOWNSCALE_FACTOR:0.8}
+  # Wi-Fi path-loss model used to trilaterate Scanners from the APs they hear:
+  # distance = 10^((ap-rssi-at1m - rssi) / (10 × path-loss-exponent)) metres
+  ap-rssi-at1m: ${LARP_AP_RSSI_AT_1M:-40}
+  path-loss-exponent: ${LARP_PATH_LOSS_EXPONENT:3.0}

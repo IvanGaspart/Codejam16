@@ -3,13 +3,16 @@ package codejam16.larpscan.service;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import codejam16.larpscan.config.LarpProperties;
 import codejam16.larpscan.domain.AccessPoint;
 import codejam16.larpscan.domain.Batch;
 import codejam16.larpscan.repository.AccessPointRepository;
 import codejam16.larpscan.repository.BatchRepository;
 import codejam16.larpscan.web.dto.BatchRequest;
+import codejam16.larpscan.web.dto.BatchRequest.ApReading;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -45,14 +48,20 @@ class JpaBatchIngestionServiceTests {
   @BeforeEach
   void setUp() {
     accessPoints.save(new AccessPoint(KNOWN_BSSID, "trottier", 3));
+    LarpProperties props =
+        new LarpProperties("key", new LarpProperties.Cors("http://x"), 120, 2.5, 60000, 5,
+            3.0, -65, 8.0, -80, 0.8, -40, 3.0);
     service = new JpaBatchIngestionService(
-        batches, accessPoints, Clock.fixed(NOW, ZoneOffset.UTC)
+        batches,
+        accessPoints,
+        new ScannerLocator(new ApLocations(), props),
+        Clock.fixed(NOW, ZoneOffset.UTC)
     );
   }
 
   @Test
   void storesBatchWithRssisAndServerReceiveTime() {
-    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-67, -72, -80)));
+    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-67, -72, -80), List.of()));
 
     Batch stored = onlyBatch();
     assertEquals(SCANNER, stored.getScannerId());
@@ -64,14 +73,14 @@ class JpaBatchIngestionServiceTests {
 
   @Test
   void storesEmptyBatch() {
-    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of()));
+    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(), List.of()));
 
     assertArrayEquals(new int[0], onlyBatch().getRssis());
   }
 
   @Test
   void storesAndLogsBatchWithUnknownBssid(CapturedOutput output) {
-    service.ingest(new BatchRequest(SCANNER, UNKNOWN_BSSID, SENT, List.of(-60)));
+    service.ingest(new BatchRequest(SCANNER, UNKNOWN_BSSID, SENT, List.of(-60), List.of()));
 
     assertEquals(UNKNOWN_BSSID, onlyBatch().getBssid());
     assertTrue(output.getOut().contains("unknown bssid=" + UNKNOWN_BSSID));
@@ -79,9 +88,39 @@ class JpaBatchIngestionServiceTests {
 
   @Test
   void doesNotLogKnownBssid(CapturedOutput output) {
-    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-60)));
+    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-60), List.of()));
 
     assertFalse(output.getOut().contains("unknown bssid"));
+  }
+
+  @Test
+  void storesNoPositionWithoutAps() {
+    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-60), null));
+
+    assertNull(onlyBatch().getLatitude());
+    assertNull(onlyBatch().getLongitude());
+  }
+
+  @Test
+  void storesPositionOfTheOnlyHeardApOnTheConnectedFloor() {
+    // 44:48:c1:a4:1a:5x is AP 11 on floor 3; 44:48:c1:a4:4f:1x is AP 0 on floor 5 (ignored)
+    service.ingest(new BatchRequest(SCANNER, KNOWN_BSSID, SENT, List.of(-60), List.of(
+        new ApReading("44:48:c1:a4:1a:52", -48),
+        new ApReading("44:48:c1:a4:4f:10", -40)
+    )));
+
+    Batch stored = onlyBatch();
+    assertEquals(45.5073446462334, stored.getLatitude(), 1e-9);
+    assertEquals(-73.57912498757777, stored.getLongitude(), 1e-9);
+  }
+
+  @Test
+  void storesNoPositionForUnknownBssid() {
+    service.ingest(new BatchRequest(SCANNER, UNKNOWN_BSSID, SENT, List.of(-60), List.of(
+        new ApReading("44:48:c1:a4:1a:52", -48)
+    )));
+
+    assertNull(onlyBatch().getLatitude());
   }
 
   private Batch onlyBatch() {

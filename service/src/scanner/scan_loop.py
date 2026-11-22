@@ -9,18 +9,20 @@ import logging
 import signal
 import sys
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
 import httpx
+from ap_detect import scan_nearby_aps
 
-from .ble import RSSI_FLOOR, Sighting, SightingBuffer, open_scanner
+from .ble import _MAC_RE, RSSI_FLOOR, Sighting, SightingBuffer, open_scanner
 from .config import ScannerConfig, load_config
 from .poster import send_batch
 from .predict import predict_floor
 
 BATCH_INTERVAL = 15.0
+MAX_APS = 64
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +34,7 @@ class ScanUpdate:
     at: datetime
     floor: dict[str, Any] | None
     devices: list[Sighting]
+    aps: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def device_count(self) -> int:
@@ -48,6 +51,33 @@ class ScanUpdate:
             return None
         bssid = self.floor.get("bssid")
         return bssid if isinstance(bssid, str) and bssid else None
+
+
+def normalize_aps(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """``{bssid, rssi}`` for ``BatchRequest.aps``: lowercase valid MACs, rssi
+    clamped to [-127, 0], strongest per BSSID, strongest-first, capped."""
+    best: dict[str, int] = {}
+    for ap in raw:
+        bssid = str(ap.get("bssid") or "").strip().lower()
+        if not _MAC_RE.match(bssid):
+            continue
+        try:
+            rssi = max(-127, min(0, int(ap["rssi"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+        if bssid not in best or rssi > best[bssid]:
+            best[bssid] = rssi
+    ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
+    return [{"bssid": b, "rssi": r} for b, r in ranked[:MAX_APS]]
+
+
+async def scan_aps() -> list[dict[str, Any]]:
+    """Nearby APs off the event loop (macOS scans take seconds); [] on error."""
+    try:
+        return normalize_aps(await asyncio.to_thread(scan_nearby_aps))
+    except Exception as exc:  # noqa: BLE001 — never crash the loop
+        log.warning("AP scan failed: %s", exc)
+        return []
 
 
 async def run(
@@ -70,8 +100,9 @@ async def run(
             await asyncio.sleep(interval)
             at = datetime.now(timezone.utc)
             devices = buffer.drain(at)
-            floor = predict_floor()
-            yield ScanUpdate(at=at, floor=floor, devices=devices)
+            floor = await asyncio.to_thread(predict_floor)
+            aps = await scan_aps()
+            yield ScanUpdate(at=at, floor=floor, devices=devices, aps=aps)
     finally:
         await scanner.stop()
 
@@ -93,6 +124,7 @@ async def post_update(
         bssid=bssid,
         sent_at=update.at,
         sightings=update.sightings,
+        aps=update.aps,
         client=client,
     )
 
@@ -123,7 +155,7 @@ def render_text(update: ScanUpdate, *, posted: bool | None = None) -> str:
     lines = [
         f"at={update.at.isoformat().replace('+00:00', 'Z')}",
         floor_line,
-        f"devices={update.device_count}  min_rssi={RSSI_FLOOR}  {post_line}".rstrip(),
+        f"devices={update.device_count}  aps={len(update.aps)}  min_rssi={RSSI_FLOOR}  {post_line}".rstrip(),
         f"{'RSSI':>6}  ADDRESS",
         f"{'----':>6}  -------",
     ]
@@ -144,6 +176,7 @@ def render_json(update: ScanUpdate, *, posted: bool | None = None) -> str:
         "devices": [
             {"address": d.address, "rssi": d.rssi} for d in update.devices
         ],
+        "aps": update.aps,
         "posted": posted,
     }
     return json.dumps(payload, indent=2)

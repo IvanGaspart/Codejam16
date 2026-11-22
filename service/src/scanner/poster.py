@@ -24,13 +24,16 @@ def build_batch_body(
     bssid: str,
     sent_at: datetime,
     sightings: list[int],
+    aps: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """JSON body matching server ``BatchRequest`` (sightings = RSSI ints)."""
+    """JSON body matching server ``BatchRequest`` (sightings = RSSI ints,
+    aps = nearby Wi-Fi ``{bssid, rssi}`` for server-side trilateration)."""
     return {
         "scannerId": str(scanner_id),
         "bssid": bssid,
         "sentAt": _iso_z(sent_at),
         "sightings": list(sightings),
+        "aps": list(aps or []),
     }
 
 
@@ -42,6 +45,7 @@ async def send_batch(
     bssid: str,
     sent_at: datetime,
     sightings: list[int],
+    aps: list[dict[str, Any]] | None = None,
     client: httpx.AsyncClient | None = None,
     timeout: float = 10.0,
 ) -> bool:
@@ -56,6 +60,7 @@ async def send_batch(
         bssid=bssid,
         sent_at=sent_at,
         sightings=sightings,
+        aps=aps,
     )
     headers = {API_KEY_HEADER: api_key, "Content-Type": "application/json"}
 
@@ -65,9 +70,10 @@ async def send_batch(
         response = await http.post(url, json=body, headers=headers)
         if response.is_success:
             log.info(
-                "posted batch bssid=%s sightings=%d status=%s",
+                "posted batch bssid=%s sightings=%d aps=%d status=%s",
                 bssid,
                 len(sightings),
+                len(body["aps"]),
                 response.status_code,
             )
             return True

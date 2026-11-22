@@ -41,7 +41,7 @@ Website (Lovable React SPA, lovable.app)
 | ID | Requirement | Milestone |
 |---|---|---|
 | RQ-01 | Every `BATCH_INTERVAL` the Scanner shall send the server a batch containing its Scanner ID, the BSSID of its current **AP** (re-read every batch), and its **Sightings**: one RSSI per distinct device heard during the interval, stronger than `RSSI_FLOOR`. It shall send a batch even when it has no Sightings. It shall not send when not connected to Wi-Fi. | MVP |
-| RQ-02 | The server shall compute each **Floor**'s **Busyness** from the Sighting counts of the latest batch per Scanner on that Floor in the last `WINDOW`, and shall delete batches older than `WINDOW`. | MVP |
+| RQ-02 | The server shall compute each **Floor**'s **Busyness** from the Sighting counts of the latest batch per Scanner on that Floor in the last `WINDOW`, and shall delete batches older than `WINDOW`, except for the latest per Scanner within the X-Ray one-hour lookback. | MVP |
 | RQ-03 | The server shall map every Trottier AP to a Floor by BSSID, loaded from CSV at startup. It shall store batches with an unknown BSSID, leave them out of Busyness and coverage, and log the BSSID. | MVP |
 | RQ-04 | The subsystems shall communicate through the REST API defined below. | MVP |
 | RQ-05 | The Scanner shall never transmit BLE addresses, CoreBluetooth identifiers or device names. It uses them only locally, to send one RSSI per device. | MVP |
@@ -160,6 +160,17 @@ BLE addresses, CoreBluetooth UUIDs, device names, and per-device timestamps are 
 - **`since`:** defaults to local midnight.
 - **CORS:** all `GET` endpoints are public, and CORS allows the Lovable origin.
 
+### `GET /api/buildings/{buildingId}/scanners`
+
+Returns the latest batch per scanner received in the last hour. Each entry contains
+`id` (scanner UUID), `floor`, `lat`, `lon`, `ageS` (seconds since receipt), and `rssis` (dBm).
+Unknown floors and unavailable coordinates are null. An empty result is `[]`.
+
+### `GET /api/xray/constants`
+
+Returns the configured `windowSeconds`, `k`, `closeRssi`, `closeD`, `farRssi`, `farD`, and
+`farDownscaleFactor` used by the live occupancy calculation.
+
 ## Data
 
 Collected by walking Trottier, then committed to `server/src/main/resources/data/`:
@@ -175,7 +186,7 @@ At startup the server truncates the AP and Floor tables and reloads them from th
 |---|---|
 | `floor` | `building_id, floor, capacity` |
 | `access_point` | `bssid (pk), building_id, floor` |
-| `batch` | `id, scanner_id, bssid, sent_at, received_at, rssis int[]` (one RSSI per device heard; kept for `WINDOW`; used for coverage and counts), `latitude, longitude` (nullable; trilaterated at ingest) |
+| `batch` | `id, scanner_id, bssid, sent_at, received_at, rssis int[]` (one RSSI per device heard; used for coverage and counts within `WINDOW`, latest per Scanner available for one hour for X-Ray), `latitude, longitude` (nullable; trilaterated at ingest) |
 | `busyness_snapshot` | `building_id, floor, at, busyness_pct, covered` (kept) |
 
 ## Website

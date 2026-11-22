@@ -62,6 +62,7 @@ class JpaBuildingQueryServiceTests {
         floors,
         snapshots,
         props,
+        batches,
         clock
     );
   }

@@ -42,12 +42,13 @@ class BatchExpiryJobTests {
   }
 
   @Test
-  void deletesBatchesOlderThanWindow() {
-    save(CUTOFF.minusSeconds(1));
+  void keepsOnlyLatestBatchOutsideLiveWindow() {
+    Batch latest = save(CUTOFF.minusSeconds(1));
+    save(CUTOFF.minusSeconds(2));
     save(CUTOFF.minusSeconds(3600));
 
     assertEquals(2, job.expire());
-    assertEquals(0, batches.count());
+    assertEquals(List.of(latest.getId()), batches.findAll().stream().map(Batch::getId).toList());
   }
 
   @Test
@@ -68,6 +69,12 @@ class BatchExpiryJobTests {
     List<Batch> remaining = batches.findAll();
     assertEquals(1, remaining.size());
     assertEquals(kept.getId(), remaining.get(0).getId());
+  }
+
+  @Test
+  void deletesEvenTheLatestBatchAtOneHour() {
+    save(NOW.minusSeconds(3600));
+    assertEquals(1, job.expire());
   }
 
   @Test

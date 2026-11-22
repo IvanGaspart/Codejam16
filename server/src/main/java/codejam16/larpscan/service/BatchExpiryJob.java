@@ -12,11 +12,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Deletes batches that have left the window (RQ-02). Runs once every {@code WINDOW}, so a batch
- * is kept for at most about two windows.
- *
- * <p>The window is {@code (t − WINDOW, t]}, so a batch received exactly at {@code t − WINDOW} is
- * already outside it and is deleted.
+ * Prunes batches outside the live occupancy window, retaining the latest per scanner for X-Ray.
  */
 @Component
 public class BatchExpiryJob {
@@ -49,14 +45,15 @@ public class BatchExpiryJob {
   }
 
   /**
-   * Deletes batches received at or before {@code now − WINDOW}.
+   * Deletes batches no longer needed for live occupancy or X-Ray.
    *
    * @return the number of batches deleted
    */
   @Transactional
   public int expire() {
-    Instant cutoff = Instant.now(clock).minusSeconds(properties.windowSeconds());
-    int deleted = batches.deleteReceivedAtOrBefore(cutoff);
+    Instant now = clock.instant();
+    Instant cutoff = now.minusSeconds(properties.windowSeconds());
+    int deleted = batches.deleteExpired(cutoff, now.minus(BatchRepository.XRAY_LOOKBACK));
     log.debug("Expired {} batches received at or before {}", deleted, cutoff);
     return deleted;
   }

@@ -19,7 +19,9 @@ import java.util.UUID;
  * the Floor is covered (RQ-10).
  */
 @Entity
-@Table(name = "batch", indexes = @Index(columnList = "received_at"))
+@Table(name = "batch", indexes = {
+    @Index(columnList = "received_at"), @Index(columnList = "scanner_id, received_at, id")
+})
 public class Batch {
 
   @Id

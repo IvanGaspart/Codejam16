@@ -3,6 +3,7 @@ package codejam16.larpscan.service;
 import codejam16.larpscan.web.dto.BuildingResponse;
 import codejam16.larpscan.web.dto.FloorBusynessResponse;
 import codejam16.larpscan.web.dto.FloorHistoryResponse;
+import codejam16.larpscan.web.dto.ScannerResponse;
 import java.time.Instant;
 import java.util.List;
 
@@ -17,6 +18,8 @@ public interface BuildingQueryService {
    * @return list of Buildings
    */
   List<BuildingResponse> listBuildings();
+
+  List<ScannerResponse> listScanners(String buildingId);
 
   /**
    * Returns the current Busyness status for every Floor in the given Building.

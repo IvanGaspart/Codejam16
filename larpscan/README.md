@@ -1,29 +1,21 @@
-# Welcome to your Lovable project
+# LARP-scan front-end
 
-This project was built with [Lovable](https://lovable.dev).
+The React and TanStack Start website shows Trottier floor occupancy on a campus map. Open a floor to see its estimated headcount and ten-minute occupancy trend. Live floor readings refresh every 15 seconds. On desktop, **Shift+X** opens X-Ray and shows scanner coverage and Wi-Fi access points, refreshing scanner readings every five seconds.
 
-## Build with Lovable
+## Install and run
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
-
-## Development
-
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+Install Node.js 22.12 or later and Bun. From the repository root, install the locked dependencies and start the development server.
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+cd larpscan
+bun install --frozen-lockfile
+VITE_API_BASE_URL=http://localhost:8080 bun run dev
 ```
 
-## Built with
+Open the local URL printed by Vite. Start the [server](../server/README.md) for local readings, or press **Alt+P** to toggle demo data. Omitting `VITE_API_BASE_URL` selects the configured Render API. To use a different API for a production build, set that variable when building.
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+```sh
+bun run test
+bun run build
+bun run preview
+```

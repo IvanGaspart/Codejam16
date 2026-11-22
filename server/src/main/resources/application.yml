@@ -29,7 +29,7 @@ larp:
   # How long a Scanner's latest batch stays valid for counts & coverage (RQ-02, RQ-10)
   window-seconds: ${LARP_WINDOW_SECONDS:120}
   # Average number of BLE devices per person (calibrated once on one Trottier floor)
-  k: ${LARP_K:2.0}
+  k: ${LARP_K:2.5}
   # Snapshot job period in milliseconds (60s default)
   snapshot-interval-ms: ${LARP_SNAPSHOT_INTERVAL_MS:60000}
   # Number of recent snapshots averaged for smoothed busyness percentage (RQ-07)

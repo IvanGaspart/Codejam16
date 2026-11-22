@@ -116,6 +116,30 @@ if ! command -v uv >/dev/null 2>&1; then
   exit 1
 fi
 
+# Everything goes under $HOME (uv tool env, ~/.local/bin, LaunchAgents / systemd --user).
+# Running with sudo leaves root-owned files there, and every later (correct, unprivileged)
+# re-run then dies with "Permission denied" inside `uv tool install --force`.
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo "install.sh: do not run with sudo; it installs a *user* daemon into $HOME" >&2
+  exit 1
+fi
+
+tool_env="$(uv tool dir)/scanner"
+foreign=()
+for p in "$tool_env" "$LOCAL_BIN/scan-loop" "$LOCAL_BIN/predict-floor" "$LOCAL_BIN/collect-aps" "$LOCAL_BIN/larp-scan-launchd"; do
+  [[ -e "$p" || -L "$p" ]] || continue
+  # find without -L stats the symlink itself, so a root-owned symlink is caught too
+  if [[ -n "$(find "$p" ! -user "$(id -un)" 2>/dev/null | head -1)" ]]; then
+    foreign+=("$p")
+  fi
+done
+if [[ ${#foreign[@]} -gt 0 ]]; then
+  echo "install.sh: these paths contain files not owned by $(id -un) (left over from a sudo run?):" >&2
+  printf '  %s\n' "${foreign[@]}" >&2
+  echo "install.sh: remove them and re-run:  sudo rm -rf ${foreign[*]}" >&2
+  exit 1
+fi
+
 if [[ "$OS" == "Darwin" && ! -d "$SERVICE_DIR/src/scanner/_bin/WifiInfo.app" ]]; then
   # _bin/ is gitignored, so fresh clones don't have the helper; it must exist before the wheel is built
   echo "install.sh: WifiInfo.app not built yet; running helper/build.sh (needs Xcode CLT) …"

@@ -27,6 +27,15 @@ uv sync
 
 On macOS this also installs `pyobjc-framework-CoreWLAN`.
 
+**macOS + iCloud Drive: keep `.venv` out of the synced tree.** If the repo lives in an iCloud-synced folder (`~/Documents` and `~/Desktop` with "Desktop & Documents Folders" on), iCloud sets the macOS `hidden` flag on every dot-directory, including `.venv`, a few seconds after it is written, and Python 3.13+ ignores hidden `.pth` files. The editable install `uv sync` creates is a `.pth`, so every `uv run …` fails with `ModuleNotFoundError: No module named 'scanner'` even though `uv sync` reports success (it works for a few seconds right after a sync, then stops). `chflags nohidden` is undone by iCloud within seconds. Put the environment outside the synced tree instead, before `uv sync`:
+
+```bash
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/larp-scan"   # add to ~/.zshrc
+uv sync
+```
+
+Check with `ls -lO .venv/lib/python3.13/site-packages/*.pth`: a `hidden` column means you're affected. Cloning outside iCloud (e.g. `~/src`) also avoids it. The daemon is unaffected: `install.sh` installs into `~/.local/share/uv/tools`, which iCloud doesn't touch.
+
 ### macOS: build the helper (once)
 
 On macOS 14+, a small helper app is needed to read the BSSID (Location Services). Build after cloning (needs Xcode CLT):
@@ -51,6 +60,8 @@ cd service
 #   ~/.config/larp-scan/env
 bash install.sh
 ```
+
+Run it as yourself, **never with `sudo`**: everything it writes (`~/.local/share/uv/tools/scanner`, `~/.local/bin`, the LaunchAgent / systemd user unit) lives in your home. A `sudo` run leaves root-owned files there and every later unprivileged `install.sh` fails inside `uv tool install --force` with `failed to remove file … uv-receipt.toml: Permission denied`. `install.sh` now refuses to run as root and aborts early if it finds files it doesn't own, printing the `sudo rm -rf …` needed to clean up.
 
 **Linux (systemd user unit)** — BlueZ/session D-Bus; linger so it can run without an interactive login:
 

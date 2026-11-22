@@ -9,3 +9,6 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+larp:
+  api-key: test-api-key

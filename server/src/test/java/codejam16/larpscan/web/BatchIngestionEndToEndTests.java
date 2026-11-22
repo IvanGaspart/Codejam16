@@ -25,8 +25,13 @@ import org.springframework.web.context.WebApplicationContext;
 @ActiveProfiles("test") //enable test profile
 class BatchIngestionEndToEndTests {
 
+  private static final String TEST_API_KEY = "test-api-key";
+
   @Autowired
   private WebApplicationContext context;
+
+  @Autowired
+  private ApiKeyFilter apiKeyFilter;
 
   @Autowired
   private BatchRepository batches;
@@ -35,7 +40,9 @@ class BatchIngestionEndToEndTests {
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.webAppContextSetup(context).build();
+    mockMvc = MockMvcBuilders.webAppContextSetup(context)
+        .addFilters(apiKeyFilter)
+        .build();
     batches.deleteAll();
   }
 
@@ -50,7 +57,10 @@ class BatchIngestionEndToEndTests {
         }
         """;
 
-    mockMvc.perform(post("/api/batches").contentType(APPLICATION_JSON).content(payload))
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
         .andExpect(status().isAccepted());
 
     List<Batch> all = batches.findAll();
@@ -70,8 +80,31 @@ class BatchIngestionEndToEndTests {
         }
         """;
 
-    mockMvc.perform(post("/api/batches").contentType(APPLICATION_JSON).content(payload))
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, TEST_API_KEY)
+            .contentType(APPLICATION_JSON)
+            .content(payload))
         .andExpect(status().isBadRequest());
+
+    assertEquals(0, batches.count());
+  }
+
+  @Test
+  void unauthorizedBatchIsNotStored() throws Exception {
+    String payload = """
+        {
+          "scannerId": "3f2b1a4c-8d9e-4b2a-9c1e-0123456789ab",
+          "bssid": "44:48:c1:a4:1a:50",
+          "sentAt": "2026-11-21T14:03:15Z",
+          "sightings": [-67, -72]
+        }
+        """;
+
+    mockMvc.perform(post("/api/batches")
+            .header(ApiKeyFilter.API_KEY_HEADER, "wrong-api-key")
+            .contentType(APPLICATION_JSON)
+            .content(payload))
+        .andExpect(status().isUnauthorized());
 
     assertEquals(0, batches.count());
   }
